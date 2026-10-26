@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Xnote</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside id="side">
+    <div class="brand">
+      <img src="logo.png" alt="">
+      <div>
+        <b>Xnote</b>
+        <small data-t="tagline"></small>
+      </div>
+    </div>
+    <div class="side-actions">
+      <button id="new-meeting" class="btn primary wide"></button>
+      <input id="search" class="search" type="search">
+    </div>
+    <nav id="list"></nav>
+    <div class="side-foot">
+      <button id="open-settings" class="btn ghost small"></button>
+      <span class="ver"></span>
+    </div>
+  </aside>
+  <main>
+    <div id="update-bar" hidden></div>
+    <div id="view"></div>
+  </main>
+  <div id="modal" hidden>
+    <div class="dialog">
+      <h2 id="modal-title"></h2>
+      <p id="modal-text"></p>
+      <div class="dialog-actions">
+        <button id="modal-cancel" class="btn"></button>
+        <button id="modal-ok" class="btn primary"></button>
+      </div>
+    </div>
+  </div>
+  <div id="toast"></div>
+  <script src="i18n.js"></script>
+  <script src="markdown.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+# Builds Xnote.exe on every version tag (v1.2.3), signs it for the in-app
+# updater and publishes it as a GitHub Release. Run scripts/release.ps1 to
+# bump the version, tag and push in one go.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches the app version
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path src-tauri/Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          if ("v$version" -ne "${{ github.ref_name }}") { throw "Tag ${{ github.ref_name }} does not match Cargo.toml version $version" }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Sign for the in-app updater
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        run: |
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item src-tauri/target/release/xnote.exe dist/Xnote.exe
+          npx tauri signer sign dist/Xnote.exe
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/Xnote.exe
+            dist/Xnote.exe.sig
+          generate_release_notes: true
