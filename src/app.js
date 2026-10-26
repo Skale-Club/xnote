@@ -155,7 +155,7 @@ function renderHead() {
     rec = `<button class="btn" disabled>${esc(label)}</button>`;
   } else {
     const label = meeting.transcript.length ? t('resume') : t('record');
-    rec = `<button class="btn rec" data-act="record"${busyElsewhere ? ' disabled' : ''}>${svg(ICONS.mic)}${esc(label)}</button>`;
+    rec = `<button class="btn ${meeting.transcript.length ? 'rec-outline' : 'rec'}" data-act="record"${busyElsewhere ? ' disabled' : ''}>${svg(ICONS.mic)}${esc(label)}</button>`;
   }
   const canEnhance = !here && !enhancing && (meeting.transcript.length || meeting.notes.trim());
   const meta = [dayLabel(meeting.created), timeOf(meeting.created), meeting.durationMs ? duration(meeting.durationMs) : ''].filter(Boolean).join(' · ');
@@ -324,6 +324,7 @@ function markdownOf(m) {
     out.push(`## ${t('transcript')}`, '');
     for (const l of m.transcript) out.push(`- **[${clock(l.ms)}] ${t(l.who)}:** ${l.text}`);
   }
+  out.push('', '---', '_Xnote · Skale Club_');
   return out.join('\n').trim() + '\n';
 }
 
@@ -490,6 +491,7 @@ function render() {
 
 $('new-meeting').addEventListener('click', newMeeting);
 $('open-settings').addEventListener('click', () => { view = 'settings'; render(); });
+$('skale').addEventListener('click', () => invoke('open_site'));
 $('search').addEventListener('input', (e) => { search = e.target.value; renderSidebar(); });
 $('list').addEventListener('click', (e) => {
   const item = e.target.closest('[data-id]');

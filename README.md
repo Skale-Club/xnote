@@ -6,6 +6,8 @@ Meet, Teams, WhatsApp…) and no bot joins the meeting. It transcribes **on your
 computer** with Whisper, and after the meeting Claude turns your rough notes
 plus the transcript into clear notes. 🇧🇷 [Português](#português) · 🇪🇸 [Español](#español)
 
+Made by **[Skale Club](https://skale.club)**.
+
 ## Download
 
 Get the latest `Xnote.exe` from **[Releases](https://github.com/skaleclub/xnote/releases/latest)**. It keeps itself up to date: when a new version is out, the app offers it at the top of the window and swaps itself in place, keeping your meetings and settings. Every update is signed and checked before it is used.
@@ -148,3 +150,7 @@ después, Claude combina tus apuntes con la transcripción y escribe notas clara
   Administrador de credenciales de Windows. Solo se envía texto a Anthropic,
   nunca el audio, que tampoco se guarda. Cuesta céntimos por reunión.
 - Todo queda junto al exe: `meetings\` (reuniones), `engine\` (motor), `exports\`.
+
+---
+
+© 2026 [Skale Club](https://skale.club)

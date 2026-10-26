@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Xnote",
+        "title": "Xnote · Skale Club",
         "width": 1240,
         "height": 800,
         "minWidth": 960,
@@ -27,6 +27,9 @@
   },
   "bundle": {
     "active": false,
+    "publisher": "Skale Club",
+    "copyright": "© 2026 Skale Club",
+    "homepage": "https://skale.club",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

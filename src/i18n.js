@@ -5,7 +5,7 @@ const I18N = {
   en: {
     locale: 'en-US',
     ui: {
-      tagline: 'AI meeting notes', newMeeting: 'New meeting', search: 'Search meetings', settings: 'Settings',
+      tagline: 'AI meeting notes', madeBy: 'Made by', newMeeting: 'New meeting', search: 'Search meetings', settings: 'Settings',
       noMeetings: 'No meetings yet.', today: 'Today', yesterday: 'Yesterday', untitled: 'Untitled meeting',
       welcomeTitle: 'Your meetings, written up for you',
       welcomeText: 'Start a meeting, jot down what matters, and Xnote fills in the rest from the transcript. Audio stays on this computer.',
@@ -46,7 +46,7 @@ const I18N = {
   pt: {
     locale: 'pt-BR',
     ui: {
-      tagline: 'Notas de reunião com IA', newMeeting: 'Nova reunião', search: 'Buscar reuniões', settings: 'Configurações',
+      tagline: 'Notas de reunião com IA', madeBy: 'Feito pela', newMeeting: 'Nova reunião', search: 'Buscar reuniões', settings: 'Configurações',
       noMeetings: 'Nenhuma reunião ainda.', today: 'Hoje', yesterday: 'Ontem', untitled: 'Reunião sem título',
       welcomeTitle: 'Suas reuniões, organizadas para você',
       welcomeText: 'Comece uma reunião, anote o que importa e o Xnote completa o resto a partir da transcrição. O áudio fica neste computador.',
@@ -87,7 +87,7 @@ const I18N = {
   es: {
     locale: 'es-ES',
     ui: {
-      tagline: 'Notas de reuniones con IA', newMeeting: 'Nueva reunión', search: 'Buscar reuniones', settings: 'Configuración',
+      tagline: 'Notas de reuniones con IA', madeBy: 'Hecho por', newMeeting: 'Nueva reunión', search: 'Buscar reuniones', settings: 'Configuración',
       noMeetings: 'Aún no hay reuniones.', today: 'Hoy', yesterday: 'Ayer', untitled: 'Reunión sin título',
       welcomeTitle: 'Tus reuniones, organizadas para ti',
       welcomeText: 'Empieza una reunión, apunta lo importante y Xnote completa el resto a partir de la transcripción. El audio se queda en este equipo.',

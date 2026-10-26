@@ -183,3 +183,17 @@ select.field { flex: none; min-width: 200px; }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
 
 @keyframes pulse { 50% { opacity: 0.35; } }
+
+/* ---------- Skale Club ---------- */
+
+.skale { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 18px; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--fg); cursor: pointer; text-align: left; }
+.skale:hover { background: rgba(143, 169, 238, 0.06); }
+.skale img { width: 30px; height: 30px; flex: none; }
+.skale span { display: flex; flex-direction: column; line-height: 1.2; font-weight: 600; font-size: 13px; }
+.skale small { color: var(--muted); font-weight: 400; font-size: 11px; }
+/* Design review: resuming a recorded meeting is a secondary action; the tab
+   icon sits on the text line. */
+.btn.rec-outline { background: transparent; color: var(--rec); border-color: rgba(255, 84, 104, 0.45); font-weight: 600; }
+.btn.rec-outline:hover:not(:disabled) { border-color: var(--rec); }
+.tab { display: inline-flex; align-items: center; gap: 6px; }
+.tab svg { width: 14px; height: 14px; }

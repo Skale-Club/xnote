@@ -380,6 +380,11 @@ async fn enhance(app: AppHandle, id: String) -> Result<meetings::Meeting, String
     .await
 }
 
+/// Opens the Skale Club website in the default browser.
+#[tauri::command]
+fn open_site() {
+    let _ = Command::new("explorer.exe").arg("https://skale.club").spawn();
+}
 /// Writes Markdown to `exports\` next to the exe and shows it in Explorer.
 #[tauri::command]
 fn save_export(name: String, markdown: String) -> Result<String, String> {
@@ -460,6 +465,7 @@ fn main() {
             clear_api_key,
             enhance,
             save_export,
+            open_site,
             check_update,
             install_update
         ])
