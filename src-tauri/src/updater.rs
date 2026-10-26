@@ -8,7 +8,7 @@
 //! Swapping: Windows lets a running exe be renamed, so the app renames itself
 //! to `<name>.old.exe`, puts the new file in its place and starts it with
 //! `--updated-from <pid>`. The new copy waits for the old one to exit, then
-//! deletes `<name>.old.exe`. Settings next to the exe are left alone.
+//! deletes `<name>.old.exe`. The `Data\` folder is left alone.
 
 use base64::Engine as _;
 use minisign_verify::{PublicKey, Signature};

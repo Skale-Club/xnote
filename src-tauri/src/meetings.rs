@@ -53,7 +53,7 @@ pub struct Store {
 
 impl Store {
     fn dir() -> PathBuf {
-        crate::exe_dir().join("meetings")
+        crate::portable::data_dir().join("meetings")
     }
 
     /// Ids are digits only, so they can't point outside the folder.

@@ -16,9 +16,10 @@ Get the latest `Xnote.exe` from **[Releases](https://github.com/skaleclub/xnote/
 ## Run it
 
 Double-click `Xnote.exe`; no installer. It needs WebView2, which comes with
-Windows 11. Everything lives next to the exe:
+Windows 11. Everything it saves lives in `Data\` next to the exe (the PortableApps
+layout, with `App\AppInfo\` for the name, version and icon):
 
-| Next to `Xnote.exe` | What it is |
+| In `Data\` | What it is |
 |---|---|
 | `xnote.json` | Settings (languages, chosen engine) |
 | `engine\` | whisper.cpp and the Whisper model, downloaded on first run |
@@ -160,7 +161,7 @@ transcrição e escreve notas organizadas.
   transcrição na nuvem pela OpenAI). Ela fica no Gerenciador de Credenciais do
   Windows. Para as notas só vai texto, nunca o áudio, que também nunca é salvo.
   Custa centavos por reunião.
-- Tudo fica ao lado do exe: `meetings\` (reuniões), `engine\` (motor), `exports\`.
+- Tudo fica na pasta `Data\` ao lado do exe: `meetings\` (reuniões), `engine\` (motor), `exports\`.
 
 ## Español
 
@@ -182,7 +183,7 @@ escribe notas claras.
   transcripción en la nube con OpenAI); se guarda en el Administrador de
   credenciales de Windows. Para las notas solo se envía texto, nunca el audio,
   que tampoco se guarda. Cuesta céntimos por reunión.
-- Todo queda junto al exe: `meetings\` (reuniones), `engine\` (motor), `exports\`.
+- Todo queda en la carpeta `Data\` junto al exe: `meetings\` (reuniones), `engine\` (motor), `exports\`.
 
 ---
 

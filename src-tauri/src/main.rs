@@ -3,7 +3,7 @@
 // transcribes locally with whisper.cpp (or in the cloud with Groq or OpenAI,
 // when the user picks that), and turns the user's rough notes plus the
 // transcript into clear notes with ChatGPT (OpenAI API). Portable: everything
-// lives next to the exe.
+// it writes lives in Data\ next to the exe.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod ai;
@@ -11,6 +11,7 @@ mod audio;
 mod cloud;
 mod engine;
 mod meetings;
+mod portable;
 mod updater;
 
 use serde::{Deserialize, Serialize};
@@ -19,7 +20,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
-use std::{fs, path::PathBuf, process::Command};
+use std::{fs, process::Command};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 
 /// Settings kept in xnote.json next to the executable.
@@ -81,21 +82,14 @@ struct AppState {
     update: Mutex<Option<updater::Update>>,
 }
 
-pub fn exe_dir() -> PathBuf {
-    std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(PathBuf::from))
-        .unwrap_or_else(|| PathBuf::from("."))
-}
-
 fn save_settings(settings: &Settings) {
     if let Ok(text) = serde_json::to_string_pretty(settings) {
-        let _ = fs::write(exe_dir().join("xnote.json"), text);
+        let _ = fs::write(portable::data_dir().join("xnote.json"), text);
     }
 }
 
 fn load_settings() -> Settings {
-    match fs::read_to_string(exe_dir().join("xnote.json")) {
+    match fs::read_to_string(portable::data_dir().join("xnote.json")) {
         // Some editors save UTF-8 with a BOM, which serde_json rejects.
         Ok(text) => serde_json::from_str(text.trim_start_matches('\u{feff}')).unwrap_or_default(),
         Err(_) => {
@@ -507,7 +501,7 @@ fn save_export(name: String, markdown: String) -> Result<String, String> {
         .take(80)
         .collect();
     let base = if safe.is_empty() { "meeting".to_string() } else { safe };
-    let dir = exe_dir().join("exports");
+    let dir = portable::data_dir().join("exports");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let mut path = dir.join(format!("{base}.md"));
     let mut n = 2;
@@ -547,6 +541,8 @@ async fn install_update(app: AppHandle) -> Result<(), String> {
 
 fn main() {
     updater::finish_previous();
+    portable::migrate(&["xnote.json", "engine", "meetings", "exports"]);
+    portable::sync_appinfo();
     tauri::Builder::default()
         .manage(AppState {
             settings: Mutex::new(load_settings()),

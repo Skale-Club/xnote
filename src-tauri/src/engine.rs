@@ -66,7 +66,7 @@ pub const MODELS: [Model; 2] = [
 ];
 
 fn engine_dir() -> PathBuf {
-    crate::exe_dir().join("engine")
+    crate::portable::data_dir().join("engine")
 }
 
 fn pack_dir(pack: &Pack) -> PathBuf {
