@@ -11,7 +11,7 @@ Made by **[Skale Club](https://skale.club)**.
 
 ## Download
 
-Get the latest `Xnote.exe` from **[Releases](https://github.com/skaleclub/xnote/releases/latest)**. It keeps itself up to date: when a new version is out, the app offers it at the top of the window and swaps itself in place, keeping your meetings and settings. Every update is signed and checked before it is used.
+Get the latest `Xnote.exe` from **[Releases](https://github.com/Skale-Club/xnote/releases/latest)**. It keeps itself up to date: when a new version is out, the app offers it at the top of the window and swaps itself in place, keeping your meetings and settings. Every update is signed and checked before it is used.
 
 ## Run it
 
