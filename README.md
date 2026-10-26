@@ -71,8 +71,10 @@ so and runs on the processor instead of silently going slow.
 2. Write notes your way while you talk; short and messy is fine. The transcript
    appears on the right, labelled **You** (microphone) and **Them** (computer
    audio).
-3. **Stop**, then **Enhance notes**: ChatGPT keeps your points, fills in details,
-   decisions and action items from the transcript, and suggests a title.
+3. **Stop**. With an OpenAI key set, ChatGPT starts writing the notes right away:
+   it keeps your points, fills in details, decisions and action items from the
+   transcript, and suggests a title. **Enhance notes** (or **Regenerate**) runs
+   it again, and works without recording too.
 4. **Copy** or **Export .md** to share.
 
 You can stop and resume recording in the same meeting.
@@ -151,8 +153,9 @@ transcrição e escreve notas organizadas.
   é verificado por SHA-256. **Na nuvem** (sem download): escolha o provedor no
   seletor (Groq, recomendado, ou OpenAI) e cole a chave da API; o áudio de cada
   frase vai para o provedor.
-- **Reunião:** Nova reunião → Gravar → anote do seu jeito → Parar → **Melhorar
-  notas**. Use **Copiar aviso** para avisar os participantes.
+- **Reunião:** Nova reunião → Gravar → anote do seu jeito → Parar. Com a chave
+  configurada, as notas melhoradas começam sozinhas; **Melhorar notas** gera de
+  novo. Use **Copiar aviso** para avisar os participantes.
 - **ChatGPT:** coloque sua chave da API da OpenAI em Configurações (a mesma da
   transcrição na nuvem pela OpenAI). Ela fica no Gerenciador de Credenciais do
   Windows. Para as notas só vai texto, nunca o áudio, que também nunca é salvo.
@@ -172,8 +175,9 @@ escribe notas claras.
   se verifica con SHA-256. **En la nube** (sin descarga): elige el proveedor en
   el selector (Groq, recomendado, u OpenAI) y pega la clave de API; el audio de
   cada frase se envía al proveedor.
-- **Reunión:** Nueva reunión → Grabar → apunta a tu manera → Detener → **Mejorar
-  notas**. Usa **Copiar aviso** para avisar a los participantes.
+- **Reunión:** Nueva reunión → Grabar → apunta a tu manera → Detener. Con la
+  clave configurada, las notas mejoradas empiezan solas; **Mejorar notas** las
+  regenera. Usa **Copiar aviso** para avisar a los participantes.
 - **ChatGPT:** añade tu clave de API de OpenAI en Configuración (la misma de la
   transcripción en la nube con OpenAI); se guarda en el Administrador de
   credenciales de Windows. Para las notas solo se envía texto, nunca el audio,

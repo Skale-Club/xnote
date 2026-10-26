@@ -30,7 +30,7 @@ let engine = null;          // { status: { gpu, packs, models }, pack, model }
 let meetings = [];
 let meeting = null;         // the open meeting
 let view = 'welcome';       // welcome | meeting | setup | settings
-let recording = null;       // { id, phase: starting | recording | finishing, since, base }
+let recording = null;       // { id, phase: starting | recording | finishing, since, base, lines }
 let engineLoading = false;
 let notesTab = 'mine';
 let enhancing = null;       // { id, text } while notes stream in
@@ -271,7 +271,7 @@ async function open(id) {
 
 async function startRecording() {
   if (!engineReady()) { view = 'setup'; render(); return; }
-  recording = { id: meeting.id, phase: 'starting', since: Date.now(), base: meeting.durationMs };
+  recording = { id: meeting.id, phase: 'starting', since: Date.now(), base: meeting.durationMs, lines: meeting.transcript.length };
   renderHead();
   renderSidebar();
   try {
@@ -287,17 +287,23 @@ async function startRecording() {
 }
 
 async function stopRecording() {
+  const linesBefore = recording?.lines ?? 0;
+  let summarize = false;
   try {
     const m = await invoke('stop_recording');
     if (meeting && meeting.id === m.id) {
       meeting.durationMs = m.durationMs;
       meeting.transcript = m.transcript;
+      // Like Granola: the notes are written as soon as the meeting ends, when
+      // something new was said and a key is set. The button stays to redo it.
+      summarize = hasKey && !enhancing && m.transcript.length > linesBefore;
     }
   } catch (e) {
     toast(explain(e));
   }
   await refreshList();
   if (view === 'meeting') renderMeeting();
+  if (summarize) enhance();
 }
 
 async function enhance() {
