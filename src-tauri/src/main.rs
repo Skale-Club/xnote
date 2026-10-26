@@ -2,8 +2,8 @@
 // the microphone and the computer's audio (no bot joins the call),
 // transcribes locally with whisper.cpp (or in the cloud with Groq or OpenAI,
 // when the user picks that), and turns the user's rough notes plus the
-// transcript into clear notes with Claude. Portable: everything lives next to
-// the exe.
+// transcript into clear notes with ChatGPT (OpenAI API). Portable: everything
+// lives next to the exe.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod ai;

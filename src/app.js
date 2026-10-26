@@ -414,6 +414,7 @@ async function useCloud(button) {
   button.textContent = t('checking');
   try {
     engine = await invoke(key ? 'set_cloud_key' : 'use_cloud', key ? { provider, key } : { provider });
+    hasKey = engine.cloudKeys.includes('openai'); // the OpenAI key also writes the notes
     toast(t('setupDone'));
     view = meeting ? 'meeting' : 'welcome';
     render();
@@ -472,10 +473,10 @@ function renderSettings() {
     opt('en', 'English', settings.transcriptionLanguage) + opt('es', 'Español', settings.transcriptionLanguage) +
     `</select></div><p class="note">${esc(t('meetingLanguageNote'))}</p></div>` +
     `<div class="card"><h3>${esc(t('aiCard'))}</h3><p>${hasKey ? `<span class="ok-text">✓ ${esc(t('keySaved'))}</span>` : esc(t('keyMissing'))}</p>` +
-    `<div class="row"><input id="api-key" class="field" type="password" placeholder="sk-ant-…" autocomplete="off">` +
+    `<div class="row"><input id="api-key" class="field" type="password" placeholder="sk-…" autocomplete="off">` +
     `<button class="btn primary" data-act="save-key">${esc(t('save'))}</button>` +
     (hasKey ? `<button class="btn danger-text" data-act="clear-key">${esc(t('remove'))}</button>` : '') +
-    `<button class="btn" data-act="key-page" data-provider="anthropic">${esc(t('getKey'))}</button>` +
+    `<button class="btn" data-act="key-page" data-provider="openai">${esc(t('getKey'))}</button>` +
     `</div><p class="note">${esc(t('keyNote'))}</p></div>` +
     `<div class="card"><h3>${esc(t('engineSettingsCard'))}</h3><div class="row"><span>${esc(transcription.filter(Boolean).join(' · '))}</span>` +
     `<button class="btn small" data-act="setup">${esc(t('change'))}</button></div></div>` +
@@ -501,6 +502,7 @@ async function saveKey(button) {
   try {
     await invoke('set_api_key', { key });
     hasKey = true;
+    engine = await invoke('engine_status'); // same key as OpenAI transcription
     toast(t('keySaved'));
   } catch (e) {
     toast(t('keyInvalid', { error: e }));
@@ -580,11 +582,17 @@ viewEl.addEventListener('click', (e) => {
   else if (act === 'install') runInstall();
   else if (act === 'setup') { view = 'setup'; setupChoice = null; render(); }
   else if (act === 'save-key') saveKey(el);
-  else if (act === 'clear-key') invoke('clear_api_key').then(() => { hasKey = false; renderSettings(); });
+  else if (act === 'clear-key') {
+    invoke('clear_api_key').then(() => invoke('engine_status')).then((info) => { engine = info; hasKey = false; renderSettings(); });
+  }
   else if (act === 'use-cloud') useCloud(el);
   else if (act === 'key-page') invoke('open_key_page', { provider: el.dataset.provider });
   else if (act === 'clear-cloud-key') {
-    invoke('clear_cloud_key', { provider: setupChoice.provider }).then((info) => { engine = info; renderSetup(); });
+    invoke('clear_cloud_key', { provider: setupChoice.provider }).then((info) => {
+      engine = info;
+      hasKey = info.cloudKeys.includes('openai');
+      renderSetup();
+    });
   }
 });
 

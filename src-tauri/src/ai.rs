@@ -1,18 +1,19 @@
-//! "Enhance notes" with Claude. The user's Anthropic API key is kept in the
-//! Windows Credential Manager, never in a file. Only text is sent: the
-//! user's notes and the transcript, never audio.
+//! "Enhance notes" with ChatGPT (the OpenAI API). It uses the same OpenAI key
+//! as cloud transcription, kept in the Windows Credential Manager, never in a
+//! file. Only text is sent: the user's notes and the transcript, never audio.
 //!
-//! Rust has no official Anthropic SDK, so this calls the Messages API over
-//! HTTP with streaming, and opts into server-side fallbacks so a request a
-//! safety classifier declines is retried on another model instead of failing.
+//! Calls the Responses API over HTTP with streaming, so the notes appear as
+//! they are written.
 
+use crate::cloud;
 use crate::meetings::Meeting;
 use std::io::{BufRead, BufReader};
 use std::time::Duration;
 
-const API: &str = "https://api.anthropic.com/v1";
-const VERSION: &str = "2026-10-21";
-const MODEL: &str = "claude-opus-5-5";
+const API: &str = "https://api.openai.com/v1";
+/// Near the flagship's quality at a fraction of its price; a one-hour
+/// meeting costs about five cents.
+const MODEL: &str = "gpt-6.1-sol";
 
 const SYSTEM: &str = "You write meeting notes. You get the user's own rough notes and a transcript of \
 the meeting. Lines marked Me were said by the user; lines marked Them were said by the other \
@@ -33,12 +34,21 @@ Then level-2 sections that fit this meeting, for example Key points, Decisions, 
 (written as \"- [ ] task (owner)\" when the owner is known) and Open questions. Leave out sections \
 that would be empty.";
 
-fn credential() -> Result<keyring::Entry, String> {
-    keyring::Entry::new("Xnote", "anthropic-api-key").map_err(|e| e.to_string())
+fn openai() -> &'static cloud::Provider {
+    cloud::provider("openai").expect("openai provider")
 }
 
 pub fn has_key() -> bool {
-    credential().and_then(|c| c.get_password().map_err(|e| e.to_string())).is_ok()
+    cloud::has_key(openai())
+}
+
+/// Checks the key with a free call before storing it.
+pub fn set_key(key: &str) -> Result<(), String> {
+    cloud::set_key(openai(), key)
+}
+
+pub fn clear_key() -> Result<(), String> {
+    cloud::clear_key(openai())
 }
 
 fn agent() -> ureq::Agent {
@@ -58,25 +68,6 @@ fn api_error(error: ureq::Error) -> String {
         }
         other => other.to_string(),
     }
-}
-
-/// Checks the key with a free call (listing models) before storing it.
-pub fn set_key(key: &str) -> Result<(), String> {
-    let key = key.trim();
-    if key.is_empty() {
-        return Err("empty key".into());
-    }
-    agent()
-        .get(&format!("{API}/models?limit=1"))
-        .set("x-api-key", key)
-        .set("anthropic-version", VERSION)
-        .call()
-        .map_err(api_error)?;
-    credential()?.set_password(key).map_err(|e| e.to_string())
-}
-
-pub fn clear_key() -> Result<(), String> {
-    credential()?.delete_credential().map_err(|e| e.to_string())
 }
 
 fn clock(ms: u64) -> String {
@@ -113,55 +104,60 @@ fn prompt(meeting: &Meeting, language: &str) -> String {
 
 /// Streams the enhanced notes; `on_text` gets each piece as it arrives.
 pub fn enhance(meeting: &Meeting, language: &str, on_text: &mut dyn FnMut(&str)) -> Result<String, String> {
-    let key = credential()?.get_password().map_err(|_| "no API key".to_string())?;
+    let key = cloud::key_of(openai()).ok_or("no API key")?;
     let body = serde_json::json!({
         "model": MODEL,
-        "max_tokens": 32000,
+        "instructions": SYSTEM,
+        "input": prompt(meeting, language),
+        "max_output_tokens": 16000,
         "stream": true,
-        "fallbacks": "default",
-        "output_config": { "effort": "medium" },
-        "system": SYSTEM,
-        "messages": [{ "role": "user", "content": prompt(meeting, language) }],
+        // Meetings can be private: don't keep the response on OpenAI's side.
+        "store": false,
     });
     let response = agent()
-        .post(&format!("{API}/messages"))
-        .set("x-api-key", &key)
-        .set("anthropic-version", VERSION)
-        .set("anthropic-beta", "server-side-fallback-2026-07-01")
-        .set("content-type", "application/json")
+        .post(&format!("{API}/responses"))
+        .set("Authorization", &format!("Bearer {key}"))
+        .set("Content-Type", "application/json")
         .send_json(body)
         .map_err(api_error)?;
 
     read_stream(BufReader::new(response.into_reader()), on_text)
 }
 
-/// Reads the server-sent events of a streamed Messages response: collects
-/// the text deltas and checks how the response ended.
+/// Reads the server-sent events of a streamed response: collects the text
+/// deltas and checks how the response ended.
 fn read_stream(reader: impl BufRead, on_text: &mut dyn FnMut(&str)) -> Result<String, String> {
     let mut text = String::new();
-    let mut stop_reason = String::new();
+    let mut refused = false;
     for line in reader.lines() {
         let line = line.map_err(|e| e.to_string())?;
         let Some(data) = line.strip_prefix("data: ") else { continue };
         let Ok(event) = serde_json::from_str::<serde_json::Value>(data) else { continue };
         match event["type"].as_str() {
-            Some("content_block_delta") if event["delta"]["type"] == "text_delta" => {
-                let piece = event["delta"]["text"].as_str().unwrap_or_default();
+            Some("response.output_text.delta") => {
+                let piece = event["delta"].as_str().unwrap_or_default();
                 text.push_str(piece);
                 on_text(piece);
             }
-            Some("message_delta") => {
-                if let Some(reason) = event["delta"]["stop_reason"].as_str() {
-                    stop_reason = reason.to_string();
+            Some("response.refusal.delta") => refused = true,
+            Some("response.incomplete") => {
+                // Cut short by the length limit: keep what was written.
+                if event["response"]["incomplete_details"]["reason"] == "content_filter" {
+                    refused = true;
                 }
             }
+            Some("response.failed") => {
+                let message = event["response"]["error"]["message"].as_str().unwrap_or("the request failed");
+                return Err(message.to_string());
+            }
             Some("error") => {
-                return Err(event["error"]["message"].as_str().unwrap_or("stream error").to_string());
+                let message = event["message"].as_str().or(event["error"]["message"].as_str());
+                return Err(message.unwrap_or("stream error").to_string());
             }
             _ => {}
         }
     }
-    if stop_reason == "refusal" {
+    if refused && text.trim().is_empty() {
         return Err("refusal".into());
     }
     if text.trim().is_empty() {
@@ -201,22 +197,14 @@ mod tests {
         assert!(p.contains("- budget"));
     }
 
-    const STREAM: &str = "event: message_start\n\
-data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\"}}\n\n\
-event: content_block_start\n\
-data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\"}}\n\n\
-event: content_block_start\n\
-data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n\
-event: content_block_delta\n\
-data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"# Sync\\n\"}}\n\n\
-event: ping\n\
-data: {\"type\":\"ping\"}\n\n\
-event: content_block_delta\n\
-data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"Done.\"}}\n\n\
-event: message_delta\n\
-data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":5}}\n\n\
-event: message_stop\n\
-data: {\"type\":\"message_stop\"}\n";
+    const STREAM: &str = "event: response.created\n\
+data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\",\"status\":\"in_progress\"}}\n\n\
+event: response.output_text.delta\n\
+data: {\"type\":\"response.output_text.delta\",\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"# Sync\\n\"}\n\n\
+event: response.output_text.delta\n\
+data: {\"type\":\"response.output_text.delta\",\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"Done.\"}\n\n\
+event: response.completed\n\
+data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"status\":\"completed\"}}\n";
 
     #[test]
     fn reads_text_deltas_from_the_stream() {
@@ -227,11 +215,22 @@ data: {\"type\":\"message_stop\"}\n";
     }
 
     #[test]
-    fn reports_refusals_and_stream_errors() {
-        let refusal = STREAM.replace("end_turn", "refusal");
+    fn reports_refusals_and_errors() {
+        let refusal = "data: {\"type\":\"response.refusal.delta\",\"delta\":\"I can't help with that.\"}\n";
         assert_eq!(read_stream(refusal.as_bytes(), &mut |_| {}).unwrap_err(), "refusal");
-        let error = "data: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}\n";
-        assert_eq!(read_stream(error.as_bytes(), &mut |_| {}).unwrap_err(), "Overloaded");
+        let failed = "data: {\"type\":\"response.failed\",\"response\":{\"status\":\"failed\",\"error\":{\"code\":\"server_error\",\"message\":\"Overloaded\"}}}\n";
+        assert_eq!(read_stream(failed.as_bytes(), &mut |_| {}).unwrap_err(), "Overloaded");
+        let error = "data: {\"type\":\"error\",\"code\":\"rate_limit_exceeded\",\"message\":\"Slow down\"}\n";
+        assert_eq!(read_stream(error.as_bytes(), &mut |_| {}).unwrap_err(), "Slow down");
+    }
+
+    #[test]
+    fn keeps_text_cut_short_by_the_length_limit() {
+        let cut = STREAM.replace(
+            "event: response.completed\n",
+            "data: {\"type\":\"response.incomplete\",\"response\":{\"status\":\"incomplete\",\"incomplete_details\":{\"reason\":\"max_output_tokens\"}}}\n\n",
+        );
+        assert_eq!(read_stream(cut.as_bytes(), &mut |_| {}).unwrap(), "# Sync\nDone.");
     }
 
     #[test]

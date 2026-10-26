@@ -3,7 +3,8 @@
 //! OpenAI-style request (a WAV file in a multipart form), so one function
 //! serves both; only the address, the model and the language field differ.
 //! Each speech segment's audio goes to the provider; nothing is stored here.
-//! The user's API keys live in the Windows Credential Manager.
+//! The user's API keys live in the Windows Credential Manager; the OpenAI key
+//! also serves "Enhance notes" (see ai.rs).
 
 use crate::audio::RATE;
 use crate::engine::{is_phantom, multipart, wav};
@@ -29,7 +30,7 @@ fn credential(provider: &Provider) -> Result<keyring::Entry, String> {
     keyring::Entry::new("Xnote", &format!("{}-api-key", provider.id)).map_err(|e| e.to_string())
 }
 
-fn key_of(provider: &Provider) -> Option<String> {
+pub fn key_of(provider: &Provider) -> Option<String> {
     credential(provider).ok()?.get_password().ok()
 }
 

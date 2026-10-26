@@ -4,7 +4,7 @@ AI meeting notes for Windows, in the spirit of Granola. Xnote records your
 microphone and what your computer plays, so it works with any call app (Zoom,
 Meet, Teams, WhatsApp…) and no bot joins the meeting. It transcribes with
 Whisper, **on your computer** or, if you prefer, in the cloud (Groq or OpenAI),
-and after the meeting Claude turns your rough notes plus the transcript into
+and after the meeting ChatGPT turns your rough notes plus the transcript into
 clear notes. 🇧🇷 [Português](#português) · 🇪🇸 [Español](#español)
 
 Made by **[Skale Club](https://skale.club)**.
@@ -26,7 +26,7 @@ Windows 11. Everything lives next to the exe:
 | `meetings\.trash\` | Deleted meetings, recoverable by hand |
 | `exports\` | Markdown exports |
 
-API keys (Claude, and Groq or OpenAI for cloud transcription) are the only
+API keys (OpenAI, and Groq if you transcribe with it) are the only
 things not in the folder: they are stored in the Windows Credential Manager.
 
 ## First run
@@ -71,25 +71,25 @@ so and runs on the processor instead of silently going slow.
 2. Write notes your way while you talk; short and messy is fine. The transcript
    appears on the right, labelled **You** (microphone) and **Them** (computer
    audio).
-3. **Stop**, then **Enhance notes**: Claude keeps your points, fills in details,
+3. **Stop**, then **Enhance notes**: ChatGPT keeps your points, fills in details,
    decisions and action items from the transcript, and suggests a title.
 4. **Copy** or **Export .md** to share.
 
 You can stop and resume recording in the same meeting.
 
-## Enhanced notes (Claude)
+## Enhanced notes (ChatGPT)
 
-Add your Anthropic API key in **Settings** (create one at
-[console.anthropic.com](https://console.anthropic.com)). Xnote checks it with a
-free call before saving it.
+Add your OpenAI API key in **Settings** (create one at
+[platform.openai.com/api-keys](https://platform.openai.com/api-keys)). It is the
+same key used for OpenAI cloud transcription, so you only add it once. Xnote
+checks it with a free call before saving it.
 
-- Model: Claude Opus 5.5, streamed, with server-side fallbacks enabled
-  (`fallbacks: "default"`), so a request a safety classifier declines is retried
-  on another model instead of failing.
-- Only **text** is sent to Anthropic: your notes and the transcript. Audio is
-  never sent to Anthropic, and is never saved.
-- Cost is a few cents per meeting (a one-hour meeting is roughly 15k input
-  tokens).
+- Model: GPT-6.1 Sol through the Responses API, streamed, with `store: false`
+  so OpenAI doesn't keep the notes.
+- Only **text** is sent for the notes: your notes and the transcript. Audio is
+  never saved.
+- Cost is a few cents per meeting (a one-hour meeting is about 15k input tokens,
+  roughly US$0.05).
 
 ## Settings
 
@@ -116,13 +116,13 @@ npm run build    # src-tauri/target/release/xnote.exe
 
 ```bash
 cd src-tauri
-cargo test --release    # audio segmentation, WAV, Claude stream parsing, updater…
+cargo test --release    # audio segmentation, WAV, ChatGPT stream parsing, updater…
 ```
 
 - `src-tauri/src/audio.rs`: microphone + WASAPI loopback capture, 16 kHz resampling, speech segmentation.
 - `src-tauri/src/engine.rs`: engine download/verification, `whisper-server` process, transcription.
 - `src-tauri/src/cloud.rs`: cloud transcription (Groq, OpenAI), keys in Credential Manager.
-- `src-tauri/src/ai.rs`: Claude Messages API (streaming), API key in Credential Manager.
+- `src-tauri/src/ai.rs`: enhanced notes with the OpenAI Responses API (streaming).
 - `src-tauri/src/meetings.rs`: meeting files.
 - `src-tauri/src/updater.rs`: signed self-update from GitHub Releases.
 - `src/app.js`, `src/style.css`, `src/markdown.js`: the window; `src/i18n.js`: English, Portuguese, Spanish.
@@ -143,7 +143,7 @@ It sets the version in `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` and `
 O Xnote faz notas de reunião com IA, no estilo do Granola. Ele grava o seu
 microfone e o som do computador, então funciona com qualquer app de chamada e
 nenhum robô entra na reunião. A transcrição usa o Whisper, **no seu computador**
-ou na nuvem (Groq ou OpenAI); depois, o Claude junta as suas anotações com a
+ou na nuvem (Groq ou OpenAI); depois, o ChatGPT junta as suas anotações com a
 transcrição e escreve notas organizadas.
 
 - **Primeira vez:** escolha onde transcrever. **Neste computador** (privado e
@@ -153,9 +153,10 @@ transcrição e escreve notas organizadas.
   frase vai para o provedor.
 - **Reunião:** Nova reunião → Gravar → anote do seu jeito → Parar → **Melhorar
   notas**. Use **Copiar aviso** para avisar os participantes.
-- **Claude:** coloque sua chave da API em Configurações. Ela fica no Gerenciador
-  de Credenciais do Windows. Só texto vai para a Anthropic, nunca o áudio, que
-  também nunca é salvo. Custa centavos por reunião.
+- **ChatGPT:** coloque sua chave da API da OpenAI em Configurações (a mesma da
+  transcrição na nuvem pela OpenAI). Ela fica no Gerenciador de Credenciais do
+  Windows. Para as notas só vai texto, nunca o áudio, que também nunca é salvo.
+  Custa centavos por reunião.
 - Tudo fica ao lado do exe: `meetings\` (reuniões), `engine\` (motor), `exports\`.
 
 ## Español
@@ -163,7 +164,7 @@ transcrição e escreve notas organizadas.
 Xnote toma notas de reuniones con IA, al estilo de Granola. Graba tu micrófono
 y el sonido del equipo, así que funciona con cualquier app de llamadas y ningún
 bot entra en la reunión. La transcripción usa Whisper, **en tu equipo** o en la
-nube (Groq u OpenAI); después, Claude combina tus apuntes con la transcripción y
+nube (Groq u OpenAI); después, ChatGPT combina tus apuntes con la transcripción y
 escribe notas claras.
 
 - **Primera vez:** elige dónde transcribir. **En este equipo** (privado y
@@ -173,9 +174,10 @@ escribe notas claras.
   cada frase se envía al proveedor.
 - **Reunión:** Nueva reunión → Grabar → apunta a tu manera → Detener → **Mejorar
   notas**. Usa **Copiar aviso** para avisar a los participantes.
-- **Claude:** añade tu clave de API en Configuración; se guarda en el
-  Administrador de credenciales de Windows. Solo se envía texto a Anthropic,
-  nunca el audio, que tampoco se guarda. Cuesta céntimos por reunión.
+- **ChatGPT:** añade tu clave de API de OpenAI en Configuración (la misma de la
+  transcripción en la nube con OpenAI); se guarda en el Administrador de
+  credenciales de Windows. Para las notas solo se envía texto, nunca el audio,
+  que tampoco se guarda. Cuesta céntimos por reunión.
 - Todo queda junto al exe: `meetings\` (reuniones), `engine\` (motor), `exports\`.
 
 ---
