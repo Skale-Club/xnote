@@ -316,7 +316,7 @@ impl Server {
 }
 
 /// 16-bit PCM WAV, mono, 16 kHz.
-fn wav(samples: &[f32]) -> Vec<u8> {
+pub(crate) fn wav(samples: &[f32]) -> Vec<u8> {
     let data_len = (samples.len() * 2) as u32;
     let mut out = Vec::with_capacity(44 + data_len as usize);
     out.extend_from_slice(b"RIFF");
@@ -338,7 +338,7 @@ fn wav(samples: &[f32]) -> Vec<u8> {
 }
 
 /// Phrases Whisper tends to invent on near-silence.
-fn is_phantom(text: &str, seconds: f32) -> bool {
+pub(crate) fn is_phantom(text: &str, seconds: f32) -> bool {
     let t = text.trim().trim_matches('.').trim().to_lowercase();
     if t.is_empty() || (t.starts_with('[') && t.ends_with(']')) || (t.starts_with('(') && t.ends_with(')')) {
         return true;
@@ -357,11 +357,12 @@ fn is_phantom(text: &str, seconds: f32) -> bool {
     seconds < 3.0 && PHANTOMS.iter().any(|p| t == *p)
 }
 
-/// Sends one segment to the server; None when nothing real was said.
-pub fn transcribe(port: u16, samples: &[f32], language: &str) -> Result<Option<String>, String> {
+/// A multipart form with text fields and a WAV file; returns the content
+/// type (with its boundary) and the body.
+pub(crate) fn multipart(fields: &[(&str, &str)], wav: &[u8]) -> (String, Vec<u8>) {
     let boundary = "xnote-7f3a9c1e";
     let mut body = Vec::new();
-    for (name, value) in [("response_format", "json"), ("temperature", "0.0"), ("language", language)] {
+    for (name, value) in fields {
         body.extend_from_slice(
             format!("--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n").as_bytes(),
         );
@@ -373,11 +374,17 @@ pub fn transcribe(port: u16, samples: &[f32], language: &str) -> Result<Option<S
         )
         .as_bytes(),
     );
-    body.extend_from_slice(&wav(samples));
+    body.extend_from_slice(wav);
     body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+    (format!("multipart/form-data; boundary={boundary}"), body)
+}
 
+/// Sends one segment to the server; None when nothing real was said.
+pub fn transcribe(port: u16, samples: &[f32], language: &str) -> Result<Option<String>, String> {
+    let fields = [("response_format", "json"), ("temperature", "0.0"), ("language", language)];
+    let (content_type, body) = multipart(&fields, &wav(samples));
     let response: serde_json::Value = ureq::post(&format!("http://127.0.0.1:{port}/inference"))
-        .set("Content-Type", &format!("multipart/form-data; boundary={boundary}"))
+        .set("Content-Type", &content_type)
         .timeout(Duration::from_secs(300))
         .send_bytes(&body)
         .map_err(|e| e.to_string())?

@@ -2,9 +2,10 @@
 
 AI meeting notes for Windows, in the spirit of Granola. Xnote records your
 microphone and what your computer plays, so it works with any call app (Zoom,
-Meet, Teams, WhatsApp…) and no bot joins the meeting. It transcribes **on your
-computer** with Whisper, and after the meeting Claude turns your rough notes
-plus the transcript into clear notes. 🇧🇷 [Português](#português) · 🇪🇸 [Español](#español)
+Meet, Teams, WhatsApp…) and no bot joins the meeting. It transcribes with
+Whisper, **on your computer** or, if you prefer, in the cloud (Groq or OpenAI),
+and after the meeting Claude turns your rough notes plus the transcript into
+clear notes. 🇧🇷 [Português](#português) · 🇪🇸 [Español](#español)
 
 Made by **[Skale Club](https://skale.club)**.
 
@@ -25,10 +26,28 @@ Windows 11. Everything lives next to the exe:
 | `meetings\.trash\` | Deleted meetings, recoverable by hand |
 | `exports\` | Markdown exports |
 
-The Claude API key is the only thing not in the folder: it is stored in the
-Windows Credential Manager.
+API keys (Claude, and Groq or OpenAI for cloud transcription) are the only
+things not in the folder: they are stored in the Windows Credential Manager.
 
 ## First run
+
+When Xnote opens for the first time it asks where to transcribe:
+
+- **On this computer**: private and free, after a one-time download (below).
+  Recommended when the computer has an NVIDIA graphics card.
+- **In the cloud**: no download and fast on any computer, with an API key from a
+  provider you pick in a selector. Recommended without an NVIDIA card.
+
+| Provider | Model | Cost |
+|---|---|---|
+| Groq (recommended) | Whisper large-v3 turbo | A few cents per hour of meeting; free plan available. Key at [console.groq.com/keys](https://console.groq.com/keys) |
+| OpenAI | gpt-transcribe | About US$0.27 per hour of meeting. Key at [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
+
+The key is checked with a free call before it is saved. In the cloud, the audio
+of each phrase is sent to the provider to be transcribed; Xnote never saves
+audio. You can switch in **Settings → Transcription → Change**.
+
+### Transcribing on this computer
 
 Xnote downloads the transcription engine once, from the official
 [whisper.cpp](https://github.com/ggml-org/whisper.cpp) release and the
@@ -67,8 +86,8 @@ free call before saving it.
 - Model: Claude Opus 5.5, streamed, with server-side fallbacks enabled
   (`fallbacks: "default"`), so a request a safety classifier declines is retried
   on another model instead of failing.
-- Only **text** is sent: your notes and the transcript. Audio never leaves the
-  computer, and is never saved.
+- Only **text** is sent to Anthropic: your notes and the transcript. Audio is
+  never sent to Anthropic, and is never saved.
 - Cost is a few cents per meeting (a one-hour meeting is roughly 15k input
   tokens).
 
@@ -102,6 +121,7 @@ cargo test --release    # audio segmentation, WAV, Claude stream parsing, update
 
 - `src-tauri/src/audio.rs`: microphone + WASAPI loopback capture, 16 kHz resampling, speech segmentation.
 - `src-tauri/src/engine.rs`: engine download/verification, `whisper-server` process, transcription.
+- `src-tauri/src/cloud.rs`: cloud transcription (Groq, OpenAI), keys in Credential Manager.
 - `src-tauri/src/ai.rs`: Claude Messages API (streaming), API key in Credential Manager.
 - `src-tauri/src/meetings.rs`: meeting files.
 - `src-tauri/src/updater.rs`: signed self-update from GitHub Releases.
@@ -122,12 +142,15 @@ It sets the version in `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` and `
 
 O Xnote faz notas de reunião com IA, no estilo do Granola. Ele grava o seu
 microfone e o som do computador, então funciona com qualquer app de chamada e
-nenhum robô entra na reunião. A transcrição roda **no seu computador** com o
-Whisper; depois, o Claude junta as suas anotações com a transcrição e escreve
-notas organizadas.
+nenhum robô entra na reunião. A transcrição usa o Whisper, **no seu computador**
+ou na nuvem (Groq ou OpenAI); depois, o Claude junta as suas anotações com a
+transcrição e escreve notas organizadas.
 
-- **Primeira vez:** escolha o motor (placa NVIDIA, recomendado, ou processador)
-  e o modelo. O download é verificado por SHA-256.
+- **Primeira vez:** escolha onde transcrever. **Neste computador** (privado e
+  grátis): escolha o motor (placa NVIDIA ou processador) e o modelo; o download
+  é verificado por SHA-256. **Na nuvem** (sem download): escolha o provedor no
+  seletor (Groq, recomendado, ou OpenAI) e cole a chave da API; o áudio de cada
+  frase vai para o provedor.
 - **Reunião:** Nova reunião → Gravar → anote do seu jeito → Parar → **Melhorar
   notas**. Use **Copiar aviso** para avisar os participantes.
 - **Claude:** coloque sua chave da API em Configurações. Ela fica no Gerenciador
@@ -139,11 +162,15 @@ notas organizadas.
 
 Xnote toma notas de reuniones con IA, al estilo de Granola. Graba tu micrófono
 y el sonido del equipo, así que funciona con cualquier app de llamadas y ningún
-bot entra en la reunión. La transcripción se hace **en tu equipo** con Whisper;
-después, Claude combina tus apuntes con la transcripción y escribe notas claras.
+bot entra en la reunión. La transcripción usa Whisper, **en tu equipo** o en la
+nube (Groq u OpenAI); después, Claude combina tus apuntes con la transcripción y
+escribe notas claras.
 
-- **Primera vez:** elige el motor (tarjeta NVIDIA, recomendado, o procesador) y
-  el modelo. La descarga se verifica con SHA-256.
+- **Primera vez:** elige dónde transcribir. **En este equipo** (privado y
+  gratis): elige el motor (tarjeta NVIDIA o procesador) y el modelo; la descarga
+  se verifica con SHA-256. **En la nube** (sin descarga): elige el proveedor en
+  el selector (Groq, recomendado, u OpenAI) y pega la clave de API; el audio de
+  cada frase se envía al proveedor.
 - **Reunión:** Nueva reunión → Grabar → apunta a tu manera → Detener → **Mejorar
   notas**. Usa **Copiar aviso** para avisar a los participantes.
 - **Claude:** añade tu clave de API en Configuración; se guarda en el

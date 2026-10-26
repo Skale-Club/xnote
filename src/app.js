@@ -96,9 +96,12 @@ const isRecordingHere = () => recording && meeting && recording.id === meeting.i
 
 function engineReady() {
   if (!engine) return false;
-  const { status, pack, model } = engine;
-  return !!pack && !!model && status.packs.includes(pack) && status.models.includes(model);
+  const { status, mode, pack, model, provider, cloudKeys } = engine;
+  if (mode === 'cloud') return cloudKeys.includes(provider);
+  return mode === 'local' && status.packs.includes(pack) && status.models.includes(model);
 }
+
+const PROVIDER_NAMES = { groq: 'Groq', openai: 'OpenAI' };
 
 async function refreshList() {
   meetings = await invoke('list_meetings');
@@ -347,31 +350,77 @@ function renderSetup() {
   const status = engine.status;
   if (!setupChoice) {
     setupChoice = {
+      // Without an NVIDIA card local transcription is slow, so the cloud is
+      // suggested first there.
+      mode: engine.mode || (status.gpu ? 'local' : 'cloud'),
       pack: engine.pack || (status.gpu ? 'cuda' : 'cpu'),
       model: engine.model || 'best',
+      provider: engine.provider || 'groq',
     };
   }
+  const tagOf = (text) => `<span class="tag">${esc(text)}</span>`;
   const choice = (group, id, name, desc, opts = {}) => {
-    const installed = (group === 'pack' ? status.packs : status.models).includes(id);
-    const tag = installed ? `<span class="tag">${esc(t('installed'))}</span>` : opts.recommended ? `<span class="tag">${esc(t('recommended'))}</span>` : '';
+    const installed = group === 'pack' ? status.packs.includes(id) : group === 'model' ? status.models.includes(id) : false;
+    const tag = installed ? tagOf(t('installed')) : opts.recommended ? tagOf(t('recommended')) : '';
+    const size = group === 'mode' || installed ? '' : `${SIZES_MB[id]} MB`;
     return `<label class="choice"><input type="radio" name="${group}" value="${id}"${setupChoice[group] === id ? ' checked' : ''}${opts.disabled ? ' disabled' : ''}>` +
       `<div><b>${esc(name)}${tag}</b><span>${esc(opts.disabled ? opts.disabledText : desc)}</span></div>` +
-      `<span class="size">${installed ? '' : `${SIZES_MB[id]} MB`}</span></label>`;
+      `<span class="size">${size}</span></label>`;
   };
+  const modeCard = `<div class="card"><h3>${esc(t('modeCard'))}</h3>` +
+    choice('mode', 'local', t('localName'), t('localDesc'), { recommended: status.gpu }) +
+    choice('mode', 'cloud', t('cloudName'), t('cloudDesc'), { recommended: !status.gpu }) + '</div>';
+  const body = setupChoice.mode === 'cloud' ? cloudSetup() : localSetup(choice);
+  viewEl.innerHTML = `<div class="page"><h1>${esc(t('setupTitle'))}</h1><p>${esc(t('setupText'))}</p>${modeCard}${body}</div>`;
+  renderInstallProgress();
+}
+
+function localSetup(choice) {
+  const status = engine.status;
   const need = (status.packs.includes(setupChoice.pack) ? 0 : SIZES_MB[setupChoice.pack]) +
     (status.models.includes(setupChoice.model) ? 0 : SIZES_MB[setupChoice.model]);
   const label = need ? t('download', { size: `${need} MB` }) : t('useThis');
-  viewEl.innerHTML =
-    `<div class="page"><h1>${esc(t('setupTitle'))}</h1><p>${esc(t('setupText'))}</p>` +
-    `<div class="card"><h3>${esc(t('engineCard'))}</h3>` +
+  return `<div class="card"><h3>${esc(t('engineCard'))}</h3>` +
     choice('pack', 'cuda', t('gpuName'), t('gpuDesc'), { recommended: status.gpu, disabled: !status.gpu, disabledText: t('noGpu') }) +
     choice('pack', 'cpu', t('cpuName'), t('cpuDesc'), { recommended: !status.gpu }) + '</div>' +
     `<div class="card"><h3>${esc(t('modelCard'))}</h3>` +
     choice('model', 'best', t('bestName'), t('bestDesc'), { recommended: true }) +
     choice('model', 'light', t('lightName'), t('lightDesc')) + '</div>' +
     `<button class="btn primary" data-act="install"${install && !install.error ? ' disabled' : ''}>${esc(install && !install.error ? t('downloading') : label)}</button>` +
-    '<div class="progress" id="setup-progress"></div></div>';
-  renderInstallProgress();
+    '<div class="progress" id="setup-progress"></div>';
+}
+
+function cloudSetup() {
+  const id = setupChoice.provider;
+  const name = PROVIDER_NAMES[id];
+  const saved = engine.cloudKeys.includes(id);
+  const opt = (value) => `<option value="${value}"${value === id ? ' selected' : ''}>${esc(PROVIDER_NAMES[value])}${value === 'groq' ? ` (${esc(t('recommended').toLowerCase())})` : ''}</option>`;
+  return `<div class="card"><h3>${esc(t('providerCard'))}</h3>` +
+    `<div class="row"><select id="provider" class="field">${opt('groq')}${opt('openai')}</select></div>` +
+    `<p class="note">${esc(t(`${id}Desc`))}</p>` +
+    (saved ? `<p><span class="ok-text">✓ ${esc(t('keySaved'))}</span></p>` : '') +
+    `<div class="row"><input id="cloud-key" class="field" type="password" placeholder="${esc(t('cloudKeyPlaceholder', { name }))}" autocomplete="off">` +
+    `<button class="btn" data-act="key-page" data-provider="${id}">${esc(t('getKey'))}</button>` +
+    (saved ? `<button class="btn danger-text" data-act="clear-cloud-key">${esc(t('remove'))}</button>` : '') + '</div>' +
+    `<p class="note">${esc(t('cloudKeyNote', { name }))}</p></div>` +
+    `<button class="btn primary" data-act="use-cloud">${esc(saved ? t('useProvider', { name }) : t('saveAndUse'))}</button>`;
+}
+
+async function useCloud(button) {
+  const provider = setupChoice.provider;
+  const key = $('cloud-key').value.trim();
+  if (!key && !engine.cloudKeys.includes(provider)) { $('cloud-key').focus(); return; }
+  button.disabled = true;
+  button.textContent = t('checking');
+  try {
+    engine = await invoke(key ? 'set_cloud_key' : 'use_cloud', key ? { provider, key } : { provider });
+    toast(t('setupDone'));
+    view = meeting ? 'meeting' : 'welcome';
+    render();
+  } catch (e) {
+    toast(t('keyInvalid', { error: e }));
+    renderSetup();
+  }
 }
 
 function renderInstallProgress() {
@@ -408,8 +457,12 @@ async function runInstall() {
 
 function renderSettings() {
   const opt = (value, label, current) => `<option value="${value}"${value === current ? ' selected' : ''}>${esc(label)}</option>`;
-  const engineName = { cuda: t('gpuName'), cpu: t('cpuName') }[engine?.pack] || '—';
-  const modelName = { best: t('bestName'), light: t('lightName') }[engine?.model] || '—';
+  const cloud = engine?.mode === 'cloud';
+  const transcription = cloud
+    ? [t('cloudName'), PROVIDER_NAMES[engine.provider]]
+    : engine?.mode === 'local'
+      ? [t('localName'), { cuda: t('gpuName'), cpu: t('cpuName') }[engine.pack], { best: t('bestName'), light: t('lightName') }[engine.model]]
+      : ['—'];
   viewEl.innerHTML =
     `<div class="page"><h1>${esc(t('settings'))}</h1><p></p>` +
     `<div class="card"><h3>${esc(t('langCard'))}</h3><div class="row" style="margin-bottom:12px"><span style="min-width:180px">${esc(t('appLanguage'))}</span>` +
@@ -422,10 +475,12 @@ function renderSettings() {
     `<div class="row"><input id="api-key" class="field" type="password" placeholder="sk-ant-…" autocomplete="off">` +
     `<button class="btn primary" data-act="save-key">${esc(t('save'))}</button>` +
     (hasKey ? `<button class="btn danger-text" data-act="clear-key">${esc(t('remove'))}</button>` : '') +
+    `<button class="btn" data-act="key-page" data-provider="anthropic">${esc(t('getKey'))}</button>` +
     `</div><p class="note">${esc(t('keyNote'))}</p></div>` +
-    `<div class="card"><h3>${esc(t('engineSettingsCard'))}</h3><div class="row"><span>${esc(engineName)} · ${esc(modelName)}</span>` +
+    `<div class="card"><h3>${esc(t('engineSettingsCard'))}</h3><div class="row"><span>${esc(transcription.filter(Boolean).join(' · '))}</span>` +
     `<button class="btn small" data-act="setup">${esc(t('change'))}</button></div></div>` +
-    `<div class="card"><h3>${esc(t('privacyCard'))}</h3><p class="note" style="margin:0">${esc(t('privacy'))}</p></div></div>`;
+    `<div class="card"><h3>${esc(t('privacyCard'))}</h3><p class="note" style="margin:0">` +
+    `${esc(cloud ? t('privacyCloud', { name: PROVIDER_NAMES[engine.provider] }) : t('privacy'))}</p></div></div>`;
   $('app-lang').addEventListener('change', (e) => {
     setLanguage(e.target.value);
     settings.language = language;
@@ -457,7 +512,7 @@ async function saveKey(button) {
 
 function renderWelcome() {
   viewEl.innerHTML = `<div class="welcome"><div><img src="logo.png" alt=""><h1>${esc(t('welcomeTitle'))}</h1>` +
-    `<p>${esc(t('welcomeText'))}</p><button class="btn primary" data-act="new">${svg(ICONS.plus)}${esc(t('newMeeting'))}</button></div></div>`;
+    `<p>${esc(t('welcomeText'))}${engine?.mode === 'local' ? ` ${esc(t('welcomeLocal'))}` : ''}</p><button class="btn primary" data-act="new">${svg(ICONS.plus)}${esc(t('newMeeting'))}</button></div></div>`;
 }
 
 function renderUpdateBar() {
@@ -499,8 +554,8 @@ $('list').addEventListener('click', (e) => {
 });
 
 viewEl.addEventListener('change', (e) => {
-  if (e.target.name === 'pack' || e.target.name === 'model') {
-    setupChoice[e.target.name] = e.target.value;
+  if (['mode', 'pack', 'model'].includes(e.target.name) || e.target.id === 'provider') {
+    setupChoice[e.target.name || e.target.id] = e.target.value;
     renderSetup();
   }
 });
@@ -526,6 +581,11 @@ viewEl.addEventListener('click', (e) => {
   else if (act === 'setup') { view = 'setup'; setupChoice = null; render(); }
   else if (act === 'save-key') saveKey(el);
   else if (act === 'clear-key') invoke('clear_api_key').then(() => { hasKey = false; renderSettings(); });
+  else if (act === 'use-cloud') useCloud(el);
+  else if (act === 'key-page') invoke('open_key_page', { provider: el.dataset.provider });
+  else if (act === 'clear-cloud-key') {
+    invoke('clear_cloud_key', { provider: setupChoice.provider }).then((info) => { engine = info; renderSetup(); });
+  }
 });
 
 listen('recording-state', ({ payload }) => {

@@ -1,12 +1,14 @@
 // Xnote: AI meeting notes for Windows, in the spirit of Granola. It records
 // the microphone and the computer's audio (no bot joins the call),
-// transcribes locally with whisper.cpp, and turns the user's rough notes plus
-// the transcript into clear notes with Claude. Portable: everything lives
-// next to the exe.
+// transcribes locally with whisper.cpp (or in the cloud with Groq or OpenAI,
+// when the user picks that), and turns the user's rough notes plus the
+// transcript into clear notes with Claude. Portable: everything lives next to
+// the exe.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod ai;
 mod audio;
+mod cloud;
 mod engine;
 mod meetings;
 mod updater;
@@ -27,14 +29,36 @@ struct Settings {
     language: String,
     /// "auto", "pt", "en" or "es"; also the language of the enhanced notes.
     transcription_language: String,
+    /// "local" (whisper.cpp on this computer) or "cloud"; empty until chosen.
+    transcription: String,
     /// Chosen whisper.cpp build ("cuda" / "cpu") and model ("best" / "light").
     pack: String,
     model: String,
+    /// Cloud provider: "groq" or "openai".
+    provider: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { language: "en".into(), transcription_language: "auto".into(), pack: String::new(), model: String::new() }
+        Self {
+            language: "en".into(),
+            transcription_language: "auto".into(),
+            transcription: String::new(),
+            pack: String::new(),
+            model: String::new(),
+            provider: "groq".into(),
+        }
+    }
+}
+
+impl Settings {
+    /// Settings from before the cloud option have an engine but no mode.
+    fn mode(&self) -> &str {
+        if self.transcription.is_empty() && !self.pack.is_empty() {
+            "local"
+        } else {
+            &self.transcription
+        }
     }
 }
 
@@ -119,15 +143,27 @@ fn set_transcription_language(state: State<AppState>, language: String) -> Resul
 // ---------- transcription engine ----------
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct EngineInfo {
     status: engine::Status,
+    mode: String,
     pack: String,
     model: String,
+    provider: String,
+    /// Providers with a saved key.
+    cloud_keys: Vec<&'static str>,
 }
 
 fn engine_info(app: &AppHandle) -> EngineInfo {
     let s = settings(app);
-    EngineInfo { status: engine::status(), pack: s.pack, model: s.model }
+    EngineInfo {
+        status: engine::status(),
+        mode: s.mode().to_string(),
+        pack: s.pack,
+        model: s.model,
+        provider: s.provider,
+        cloud_keys: cloud::PROVIDERS.iter().filter(|p| cloud::has_key(p)).map(|p| p.id).collect(),
+    }
 }
 
 #[tauri::command]
@@ -149,12 +185,86 @@ async fn install_engine(app: AppHandle, pack: String, model: String) -> Result<E
     let state = app.state::<AppState>();
     {
         let mut s = state.settings.lock().unwrap();
+        s.transcription = "local".into();
         s.pack = pack;
         s.model = model;
         save_settings(&s);
     }
     *state.server.lock().unwrap() = None; // restart with the new choice
     Ok(engine_info(&app))
+}
+
+/// Checks and stores a cloud provider's key, then transcribes with it.
+#[tauri::command]
+async fn set_cloud_key(app: AppHandle, provider: String, key: String) -> Result<EngineInfo, String> {
+    let p = cloud::provider(&provider).ok_or("unknown provider")?;
+    blocking(move || cloud::set_key(p, &key)).await?;
+    use_cloud(app, provider)
+}
+
+/// Transcribes in the cloud with a provider whose key is already saved.
+#[tauri::command]
+fn use_cloud(app: AppHandle, provider: String) -> Result<EngineInfo, String> {
+    let p = cloud::provider(&provider).ok_or("unknown provider")?;
+    if !cloud::has_key(p) {
+        return Err("no transcription key".into());
+    }
+    let state = app.state::<AppState>();
+    {
+        let mut s = state.settings.lock().unwrap();
+        s.transcription = "cloud".into();
+        s.provider = provider;
+        save_settings(&s);
+    }
+    *state.server.lock().unwrap() = None; // frees the graphics card
+    Ok(engine_info(&app))
+}
+
+#[tauri::command]
+fn clear_cloud_key(app: AppHandle, provider: String) -> Result<EngineInfo, String> {
+    let p = cloud::provider(&provider).ok_or("unknown provider")?;
+    cloud::clear_key(p)?;
+    Ok(engine_info(&app))
+}
+
+/// Opens a provider's API key page in the default browser.
+#[tauri::command]
+fn open_key_page(provider: String) {
+    let url = match provider.as_str() {
+        "groq" => "https://console.groq.com/keys",
+        "openai" => "https://platform.openai.com/api-keys",
+        "anthropic" => "https://console.anthropic.com/settings/keys",
+        _ => return,
+    };
+    let _ = Command::new("explorer.exe").arg(url).spawn();
+}
+
+/// Where the recording's segments get transcribed.
+enum Transcriber {
+    Local(u16),
+    Cloud(&'static cloud::Provider),
+}
+
+impl Transcriber {
+    fn transcribe(&self, samples: &[f32], language: &str) -> Result<Option<String>, String> {
+        match self {
+            Transcriber::Local(port) => engine::transcribe(*port, samples, language),
+            Transcriber::Cloud(provider) => cloud::transcribe(provider, samples, language),
+        }
+    }
+}
+
+/// The transcriber for the current settings; "engine" when none is set up.
+fn transcriber(app: &AppHandle) -> Result<Transcriber, String> {
+    let s = settings(app);
+    match s.mode() {
+        "local" => ensure_server(app).map(Transcriber::Local),
+        "cloud" => {
+            let p = cloud::provider(&s.provider).filter(|p| cloud::has_key(p)).ok_or("engine")?;
+            Ok(Transcriber::Cloud(p))
+        }
+        _ => Err("engine".into()),
+    }
 }
 
 /// Starts (or reuses) the whisper server for the current settings.
@@ -244,7 +354,7 @@ async fn start_recording(app: AppHandle, id: String) -> Result<Vec<String>, Stri
             return Err("already recording".into());
         }
         let meeting = state.store.get(&id)?;
-        let port = ensure_server(&app)?;
+        let transcriber = transcriber(&app)?;
         let language = settings(&app).transcription_language;
 
         let (tx, rx) = mpsc::channel::<audio::Segment>();
@@ -258,7 +368,7 @@ async fn start_recording(app: AppHandle, id: String) -> Result<Vec<String>, Stri
             let (app, id) = (app.clone(), id.clone());
             std::thread::spawn(move || {
                 for segment in rx {
-                    match engine::transcribe(port, &segment.samples, &language) {
+                    match transcriber.transcribe(&segment.samples, &language) {
                         Ok(Some(text)) => {
                             let line = meetings::Line {
                                 ms: offset_ms + segment.start_ms,
@@ -452,6 +562,10 @@ fn main() {
             set_transcription_language,
             engine_status,
             install_engine,
+            set_cloud_key,
+            use_cloud,
+            clear_cloud_key,
+            open_key_page,
             list_meetings,
             get_meeting,
             create_meeting,
