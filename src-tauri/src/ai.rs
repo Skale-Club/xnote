@@ -11,8 +11,7 @@ use std::io::{BufRead, BufReader};
 use std::time::Duration;
 
 const API: &str = "https://api.openai.com/v1";
-/// Near the flagship's quality at a fraction of its price; a one-hour
-/// meeting costs about five cents.
+/// Configured model identifier. Availability and pricing depend on the provider account.
 const MODEL: &str = "gpt-6.1-sol";
 
 const SYSTEM: &str = "You write meeting notes. You get the user's own rough notes and a transcript of \
@@ -111,7 +110,7 @@ pub fn enhance(meeting: &Meeting, language: &str, on_text: &mut dyn FnMut(&str))
         "input": prompt(meeting, language),
         "max_output_tokens": 16000,
         "stream": true,
-        // Meetings can be private: don't keep the response on OpenAI's side.
+        // Disable stored response state; provider retention policies still apply.
         "store": false,
     });
     let response = agent()

@@ -1,6 +1,8 @@
 # Publishes a new version: sets it in Cargo.toml, tauri.conf.json and
 # package.json, commits, tags and pushes. GitHub Actions then builds, signs
-# and releases the exe, and every installed copy offers the update.
+# and releases the exe when the signing secret is configured. The updater
+# requires publicly readable release assets. This helper does not refresh
+# lockfiles or run tests; see docs/DEVELOPMENT.md for the reviewed process.
 #
 #   ./scripts/release.ps1 0.2.0
 param([Parameter(Mandatory)][string]$Version)

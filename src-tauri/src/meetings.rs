@@ -1,4 +1,4 @@
-//! Meetings are JSON files in `meetings\` next to the exe: the user's notes,
+//! Meetings are JSON files in `Data/meetings` beside the exe: the user's notes,
 //! the transcript and the enhanced notes. Audio is never stored.
 
 use serde::{Deserialize, Serialize};

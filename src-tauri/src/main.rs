@@ -23,7 +23,7 @@ use std::time::{Duration, Instant};
 use std::{fs, process::Command};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 
-/// Settings kept in xnote.json next to the executable.
+/// Settings kept in Data/xnote.json beside the executable.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 struct Settings {
@@ -489,7 +489,7 @@ async fn enhance(app: AppHandle, id: String) -> Result<meetings::Meeting, String
 fn open_site() {
     let _ = Command::new("explorer.exe").arg("https://skale.club").spawn();
 }
-/// Writes Markdown to `exports\` next to the exe and shows it in Explorer.
+/// Writes Markdown to `Data/exports` beside the exe and shows it in Explorer.
 #[tauri::command]
 fn save_export(name: String, markdown: String) -> Result<String, String> {
     let safe: String = name

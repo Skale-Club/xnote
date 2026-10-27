@@ -1,5 +1,5 @@
 //! Local transcription with whisper.cpp. The official Windows build and a
-//! Whisper model are downloaded once into `engine\` next to the exe (checked
+//! Whisper model are downloaded once into `Data/engine` beside the exe (checked
 //! against pinned SHA-256 hashes), then `whisper-server.exe` runs in the
 //! background and turns each speech segment into text. Audio never leaves
 //! the computer.
