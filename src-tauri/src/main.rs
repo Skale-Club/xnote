@@ -10,6 +10,8 @@ mod ai;
 mod audio;
 mod cloud;
 mod engine;
+mod mcp;
+mod mcp_tools;
 mod meetings;
 mod portable;
 mod startup;
@@ -155,7 +157,10 @@ struct EngineInfo {
 }
 
 fn engine_info(app: &AppHandle) -> EngineInfo {
-    let s = settings(app);
+    engine_info_of(settings(app))
+}
+
+fn engine_info_of(s: Settings) -> EngineInfo {
     EngineInfo {
         status: engine::status(),
         mode: s.mode().to_string(),
@@ -660,6 +665,9 @@ fn main() {
     updater::finish_previous();
     portable::migrate(&["xnote.json", "engine", "meetings", "exports"]);
     portable::sync_appinfo();
+    if mcp::requested() {
+        return mcp_tools::serve();
+    }
     tauri::Builder::default()
         .manage(AppState {
             settings: Mutex::new(load_settings()),

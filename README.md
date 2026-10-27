@@ -83,6 +83,38 @@ does not count. Startup still allows up to three minutes, so slow storage or blo
 local connections can still cause a wait. The engine/model remain in the portable
 `Data/engine` folder; this change does not introduce an SSD model cache.
 
+## Use with Claude Code and Codex
+
+`Xnote.exe --mcp` runs Xnote as a local [MCP](https://modelcontextprotocol.io) server, with no
+window, so AI assistants such as Claude Code and Codex can use its engine on this PC. Xnote itself
+sends nothing over the network; what the assistant reads goes to its AI provider, as with anything
+else you share with it. It only reads, and never returns API keys; connecting it lets the assistant
+read your meeting notes and transcripts.
+
+Claude Code (available in every project):
+
+```bash
+claude mcp add --scope user xnote -- "C:\Apps\Xnote\Xnote.exe" --mcp
+```
+
+Codex, in `%USERPROFILE%\.codex\config.toml`:
+
+```toml
+[mcp_servers.xnote]
+command = 'C:\Apps\Xnote\Xnote.exe'
+args = ["--mcp"]
+```
+
+Use the path where your `Xnote.exe` is. Tools:
+
+- `app_info`: version, where the exe and `Data` folder are, and the saved settings.
+- `list_meetings`: saved meetings, newest first.
+- `get_meeting`: `id`: one meeting with notes, enhanced notes and transcript.
+- `search_meetings`: `query`, `limit`: finds text in every meeting and returns the matching
+  passages.
+- `transcription_status`: local or cloud transcription, installed engine and models, providers with
+  a key.
+
 ## Development
 
 Tauri 2, Rust and plain HTML/CSS/JavaScript. See the [development and release
@@ -111,6 +143,9 @@ padrão do Windows; funciona junto de apps de chamada sem inserir um robô na re
   própria, e `store: false` não   significa retenção zero em todos os sistemas do provedor.
 - **Limites:** distingue “Você” de “Eles”, sem separar cada participante   remoto. A transcrição
   pode atrasar. O atualizador não acessa releases privadas.
+- **Claude Code e Codex**: `Xnote.exe --mcp` roda o Xnote como servidor MCP local, sem janela, para
+  assistentes de IA usarem as reuniões salvas (só leitura; o que o assistente lê vai para o provedor
+  de IA dele). Veja [Use with Claude Code and Codex](#use-with-claude-code-and-codex).
 
 ## Español
 
@@ -135,6 +170,9 @@ predeterminada de Windows, sin añadir un bot a la llamada.
   equivale a retención cero en todos los   sistemas del proveedor.
 - **Límites:** distingue “Tú” y “Ellos”, sin identificar a cada participante   remoto. Puede haber
   retrasos. El actualizador no accede a releases privadas.
+- **Claude Code y Codex**: `Xnote.exe --mcp` ejecuta Xnote como servidor MCP local, sin ventana,
+  para que asistentes de IA usen las reuniones guardadas (solo lectura; lo que lee el asistente va a
+  su proveedor de IA). Consulta [Use with Claude Code and Codex](#use-with-claude-code-and-codex).
 
 ## Skale Club apps
 
@@ -144,11 +182,10 @@ Portuguese and Spanish UI text. Each app has its own executable and portable Dat
 
 | App | Purpose |
 | --- | --- |
+| [Xpecs](https://github.com/Skale-Club/xpecs) | Care for the PC (cleaning, disk space, drivers, startup, apps) and inspect hardware, live sensors and benchmarks |
 | [Xink](https://github.com/Skale-Club/xink) | Draw over the screen during presentations or recordings |
-| [Xpecs](https://github.com/Skale-Club/xpecs) | Inspect hardware, live sensors and benchmark results |
-| [Xcare](https://github.com/Skale-Club/xcare) | Clean selected files, manage startup programs and explicitly remove stubborn files |
 | [Xnote](https://github.com/Skale-Club/xnote) | Transcribe meetings and turn notes into summaries and tasks |
-| [Xpace](https://github.com/Skale-Club/xpace) | Analyze disk usage with a folder tree, treemap, largest files and file-type totals |
+| [Xvert](https://github.com/Skale-Club/xvert) | Convert videos, music and pictures between formats |
 
 Repository access may be required depending on project visibility. Report problems through the
 relevant repository, including app version, Windows version and reproduction steps. Remove

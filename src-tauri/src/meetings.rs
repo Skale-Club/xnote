@@ -33,7 +33,7 @@ pub struct Meeting {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Summary {
-    id: String,
+    pub id: String,
     title: String,
     created: u64,
     duration_ms: u64,
