@@ -39,7 +39,6 @@ let search = '';
 let install = null;         // { engine: {done,total}, model: {done,total}, error }
 let setupChoice = null;     // { pack, model }
 let pendingUpdate = null;
-let consentDismissed = false;
 let saveTimer = null;
 
 // ---------- helpers ----------
@@ -174,17 +173,6 @@ function renderHead() {
   tick();
 }
 
-function renderBanner() {
-  const el = $('banner-slot');
-  if (!el) return;
-  const show = isRecordingHere() && recording.phase === 'recording' && !consentDismissed;
-  el.innerHTML = show
-    ? `<div class="banner"><span>${esc(t('consent'))}</span><span class="row">` +
-      `<button class="btn small" data-act="notice">${esc(t('copyNotice'))}</button>` +
-      `<button class="btn ghost small" data-act="dismiss">✕</button></span></div>`
-    : '';
-}
-
 function enhancedHtml() {
   if (enhancing && enhancing.id === meeting.id) return renderMarkdown(enhancing.text) + '<span class="cursor"></span>';
   return renderMarkdown(meeting.enhanced);
@@ -224,11 +212,10 @@ function renderTranscript() {
 }
 
 function renderMeeting() {
-  viewEl.innerHTML = '<div class="head" id="head"></div><div id="banner-slot"></div>' +
+  viewEl.innerHTML = '<div class="head" id="head"></div>' +
     '<div class="panes"><section class="pane" id="notes-pane"></section>' +
     `<section class="pane"><div class="pane-head"><h3>${esc(t('transcript'))}</h3></div><div class="transcript" id="transcript"></div></section></div>`;
   renderHead();
-  renderBanner();
   renderNotesPane();
   renderTranscript();
 }
@@ -271,7 +258,6 @@ async function open(id) {
   }
   view = 'meeting';
   notesTab = meeting.enhanced ? 'enhanced' : 'mine';
-  consentDismissed = false;
   render();
 }
 
@@ -589,8 +575,6 @@ viewEl.addEventListener('click', (e) => {
     invoke('save_export', { name: meeting.title || t('untitled'), markdown: markdownOf(meeting) })
       .then((path) => toast(t('exported', { path })), (err) => toast(explain(err)));
   } else if (act === 'delete') removeMeeting();
-  else if (act === 'notice') navigator.clipboard.writeText(t('noticeText')).then(() => toast(t('copied')));
-  else if (act === 'dismiss') { consentDismissed = true; renderBanner(); }
   else if (act === 'install') runInstall();
   else if (act === 'setup') { view = 'setup'; setupChoice = null; render(); }
   else if (act === 'save-key') saveKey(el);
@@ -616,7 +600,7 @@ listen('recording-state', ({ payload }) => {
   } else {
     recording = { id: payload.id, phase: payload.phase, since: Date.now(), base: 0 };
   }
-  if (view === 'meeting') { renderHead(); renderBanner(); }
+  if (view === 'meeting') renderHead();
   renderSidebar();
 });
 

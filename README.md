@@ -46,8 +46,7 @@ Settings.
 
 ### Take meeting notes
 
-1. Choose **New meeting**. Use **Copy notice** to tell participants that you are    transcribing the
-   call.
+1. Choose **New meeting**. Let participants know that you are transcribing the call.
 2. Make sure the call uses the same microphone and output device selected as    Windows defaults.
    Xnote captures those devices when recording starts.
 3. Choose **Start recording** and write your own notes. The transcript labels    microphone audio
@@ -134,7 +133,7 @@ padrão do Windows; funciona junto de apps de chamada sem inserir um robô na re
 - **Transcrição:** escolha processamento local com whisper.cpp ou nuvem com   Groq/OpenAI. No modo
   local, o áudio permanece no computador; na nuvem, os   trechos de áudio são enviados ao provedor.
 - **Uso:** Nova reunião → Gravar → anotar → Parar. Configure a chamada com os   dispositivos padrão
-  do Windows e use **Copiar aviso** para informar os participantes.
+  do Windows e avise os participantes de que a reunião está sendo transcrita.
 - **Resumo:** ao parar, havendo texto novo e uma chave OpenAI, as notas   melhoradas são geradas
   automaticamente. Isso envia anotações e transcrição   à OpenAI mesmo com transcrição local. Uma
   chave Groq não habilita o resumo.
@@ -156,7 +155,7 @@ predeterminada de Windows, sin añadir un bot a la llamada.
 - **Transcripción:** local con whisper.cpp o en la nube con Groq/OpenAI. El modo   local procesa el
   audio en el equipo; la nube envía segmentos al proveedor.
 - **Uso:** Nueva reunión → Grabar → tomar apuntes → Detener. Use los dispositivos   predeterminados
-  de Windows y **Copiar aviso** para informar a los participantes.
+  de Windows y avise a los participantes de que la reunión se está transcribiendo.
 - **Resumen:** al detener, si hay texto nuevo y una clave OpenAI, se generan las   notas
   automáticamente. Se envían apuntes y transcripción a OpenAI incluso con   transcripción local. Una
   clave Groq no habilita el resumen.

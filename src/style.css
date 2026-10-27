@@ -99,7 +99,6 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .meter.me .bar i { background: var(--brand-soft); }
 .meter.them .bar i { background: var(--them); }
 
-.banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 28px 0; padding: 9px 14px; border-radius: 10px; background: rgba(255, 84, 104, 0.1); border: 1px solid rgba(255, 84, 104, 0.35); font-size: 13px; }
 
 /* notes + transcript */
 .panes { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
