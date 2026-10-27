@@ -7,6 +7,7 @@ const I18N = {
     ui: {
       tagline: 'AI meeting notes', madeBy: 'Made by', newMeeting: 'New meeting', search: 'Search meetings', settings: 'Settings',
       noMeetings: 'No meetings yet.', today: 'Today', yesterday: 'Yesterday', untitled: 'Untitled meeting',
+      unreadable: 'Meeting that can’t be opened', unreadableNote: 'This meeting file can’t be read. It is still in Data\\meetings. ({error})',
       welcomeTitle: 'Your meetings, written up for you',
       welcomeText: 'Start a meeting, jot down what matters, and Xnote fills in the rest from the transcript.',
       welcomeLocal: 'Audio stays on this computer.',
@@ -58,6 +59,7 @@ const I18N = {
     ui: {
       tagline: 'Notas de reunião com IA', madeBy: 'Feito pela', newMeeting: 'Nova reunião', search: 'Buscar reuniões', settings: 'Configurações',
       noMeetings: 'Nenhuma reunião ainda.', today: 'Hoje', yesterday: 'Ontem', untitled: 'Reunião sem título',
+      unreadable: 'Reunião que não abre', unreadableNote: 'Não foi possível ler o arquivo desta reunião. Ele continua em Data\\meetings. ({error})',
       welcomeTitle: 'Suas reuniões, organizadas para você',
       welcomeText: 'Comece uma reunião, anote o que importa e o Xnote completa o resto a partir da transcrição.',
       welcomeLocal: 'O áudio fica neste computador.',
@@ -109,6 +111,7 @@ const I18N = {
     ui: {
       tagline: 'Notas de reuniones con IA', madeBy: 'Hecho por', newMeeting: 'Nueva reunión', search: 'Buscar reuniones', settings: 'Configuración',
       noMeetings: 'Aún no hay reuniones.', today: 'Hoy', yesterday: 'Ayer', untitled: 'Reunión sin título',
+      unreadable: 'Reunión que no se puede abrir', unreadableNote: 'No se pudo leer el archivo de esta reunión. Sigue en Data\\meetings. ({error})',
       welcomeTitle: 'Tus reuniones, organizadas para ti',
       welcomeText: 'Empieza una reunión, apunta lo importante y Xnote completa el resto a partir de la transcripción.',
       welcomeLocal: 'El audio se queda en este equipo.',

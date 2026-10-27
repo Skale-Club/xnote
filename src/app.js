@@ -135,8 +135,9 @@ function renderSidebar() {
     if (day !== lastDay) { html += `<div class="day">${esc(day)}</div>`; lastDay = day; }
     const dot = recording && recording.id === m.id ? '<span class="rec-dot"></span>' : '';
     const meta = [timeOf(m.created), m.durationMs ? duration(m.durationMs) : ''].filter(Boolean).join(' · ');
-    html += `<button class="item${meeting && meeting.id === m.id && view === 'meeting' ? ' on' : ''}" data-id="${m.id}">` +
-      `<span class="t${m.title ? '' : ' untitled'}">${dot}${esc(m.title || t('untitled'))}</span><span class="m">${esc(meta)}</span></button>`;
+    const title = m.broken ? t('unreadable') : m.title || t('untitled');
+    html += `<button class="item${meeting && meeting.id === m.id && view === 'meeting' ? ' on' : ''}" data-id="${esc(m.id)}">` +
+      `<span class="t${m.title && !m.broken ? '' : ' untitled'}">${dot}${esc(title)}</span><span class="m">${esc(meta)}</span></button>`;
   }
   $('list').innerHTML = html;
 }
@@ -208,7 +209,7 @@ function renderNotesPane() {
 }
 
 function lineHtml(l) {
-  return `<div class="line"><span class="time">${clock(l.ms)}</span><span class="who ${l.who}">${esc(t(l.who))}</span><span>${esc(l.text)}</span></div>`;
+  return `<div class="line"><span class="time">${clock(l.ms)}</span><span class="who ${l.who === 'me' ? 'me' : 'them'}">${esc(t(l.who))}</span><span>${esc(l.text)}</span></div>`;
 }
 
 function renderTranscript() {
@@ -262,7 +263,12 @@ async function newMeeting() {
 }
 
 async function open(id) {
-  meeting = await invoke('get_meeting', { id });
+  try {
+    meeting = await invoke('get_meeting', { id });
+  } catch (e) {
+    toast(t('unreadableNote', { error: String(e) }));
+    return;
+  }
   view = 'meeting';
   notesTab = meeting.enhanced ? 'enhanced' : 'mine';
   consentDismissed = false;

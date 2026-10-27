@@ -38,6 +38,8 @@ pub struct Summary {
     created: u64,
     duration_ms: u64,
     enhanced: bool,
+    /// The file is there but can't be read; it is listed so it doesn't just vanish.
+    broken: bool,
 }
 
 fn now_ms() -> u64 {
@@ -64,9 +66,23 @@ impl Store {
         Ok(Self::dir().join(format!("{id}.json")))
     }
 
+    /// The file name decides which meeting this is, whatever id is written
+    /// inside, so an edited or restored file can't redirect a save to another
+    /// meeting. Speakers other than "me" and "them" become "them".
     fn read(id: &str) -> Result<Meeting, String> {
         let text = fs::read_to_string(Self::path(id)?).map_err(|e| e.to_string())?;
-        serde_json::from_str(&text).map_err(|e| e.to_string())
+        Self::parse(id, &text)
+    }
+
+    fn parse(id: &str, text: &str) -> Result<Meeting, String> {
+        let mut meeting: Meeting = serde_json::from_str(text).map_err(|e| e.to_string())?;
+        meeting.id = id.to_string();
+        for line in &mut meeting.transcript {
+            if line.who != "me" {
+                line.who = "them".into();
+            }
+        }
+        Ok(meeting)
     }
 
     fn write(meeting: &Meeting) -> Result<(), String> {
@@ -97,13 +113,24 @@ impl Store {
             .filter_map(|e| {
                 let name = e.file_name().to_string_lossy().into_owned();
                 let id = name.strip_suffix(".json")?;
-                let m = Self::read(id).ok()?;
-                Some(Summary {
-                    id: m.id,
-                    title: m.title,
-                    created: m.created,
-                    duration_ms: m.duration_ms,
-                    enhanced: !m.enhanced.is_empty(),
+                Self::path(id).ok()?;
+                Some(match Self::read(id) {
+                    Ok(m) => Summary {
+                        id: m.id,
+                        title: m.title,
+                        created: m.created,
+                        duration_ms: m.duration_ms,
+                        enhanced: !m.enhanced.is_empty(),
+                        broken: false,
+                    },
+                    Err(_) => Summary {
+                        id: id.to_string(),
+                        title: String::new(),
+                        created: id.parse().unwrap_or(0),
+                        duration_ms: 0,
+                        enhanced: false,
+                        broken: true,
+                    },
                 })
             })
             .collect();
@@ -144,5 +171,15 @@ mod tests {
         assert!(Store::path(r"..\..\secret").is_err());
         assert!(Store::path("1730000000000").is_ok());
         assert!(Store::path("").is_err());
+    }
+
+    #[test]
+    fn the_file_name_decides_the_id_and_speakers_are_checked() {
+        let text = r#"{"id":"222","notes":"x","transcript":[{"ms":0,"who":"me","text":"a"},{"ms":1,"who":"x\" onclick=\"y","text":"b"}]}"#;
+        let m = Store::parse("111", text).unwrap();
+        assert_eq!(m.id, "111");
+        assert_eq!(m.transcript[0].who, "me");
+        assert_eq!(m.transcript[1].who, "them");
+        assert!(Store::parse("111", "{not json").is_err());
     }
 }

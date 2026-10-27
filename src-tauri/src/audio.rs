@@ -81,8 +81,10 @@ impl Resampler {
             out.push(self.buf[i] * (1.0 - frac) + self.buf[i + 1] * frac);
             self.pos += self.step;
         }
-        let used = self.pos as usize;
-        self.buf.drain(..used.min(self.buf.len()));
+        // The position may already point past the buffer; keep that offset
+        // for the next callback so the output doesn't depend on block sizes.
+        let used = (self.pos as usize).min(self.buf.len());
+        self.buf.drain(..used);
         self.pos -= used as f64;
     }
 }
@@ -354,5 +356,23 @@ mod tests {
         let mut out = Vec::new();
         r.process(&vec![0.5f32; 48_000], &mut out);
         assert!((out.len() as i64 - 16_000).abs() <= 2);
+    }
+
+    #[test]
+    fn block_size_does_not_change_the_output() {
+        for rate in [44_100u32, 48_000] {
+            let input: Vec<f32> = (0..rate).map(|i| (i as f32 * 0.01).sin()).collect();
+            let mut whole = Vec::new();
+            Resampler::new(rate).process(&input, &mut whole);
+            for block in [1usize, 7, 128, 256, 441, 480] {
+                let mut r = Resampler::new(rate);
+                let mut out = Vec::new();
+                for chunk in input.chunks(block) {
+                    r.process(chunk, &mut out);
+                }
+                assert_eq!(out.len(), whole.len(), "{rate} Hz in blocks of {block}");
+                assert!(out.iter().zip(&whole).all(|(a, b)| (a - b).abs() < 1e-4), "{rate} Hz in blocks of {block}");
+            }
+        }
     }
 }
