@@ -1,6 +1,6 @@
 [package]
 name = "xnote"
-version = "0.1.0"
+version = "0.1.1"
 description = "Xnote: AI meeting notes with local transcription"
 edition = "2021"
 

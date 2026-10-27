@@ -3,7 +3,9 @@
 <head>
   <meta charset="utf-8">
   <title>Xnote</title>
+  <link rel="stylesheet" href="skale.css">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="preparation.css">
 </head>
 <body>
   <aside id="side">
@@ -27,6 +29,7 @@
   </aside>
   <main>
     <div id="update-bar" hidden></div>
+    <section id="preparation" aria-label="Recording preparation" hidden></section>
     <div id="view"></div>
   </main>
   <div id="modal" hidden>
@@ -42,6 +45,7 @@
   <div id="toast"></div>
   <script src="i18n.js"></script>
   <script src="markdown.js"></script>
+  <script src="preparation.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -12,6 +12,7 @@ mod cloud;
 mod engine;
 mod meetings;
 mod portable;
+mod startup;
 mod updater;
 
 use serde::{Deserialize, Serialize};
@@ -76,6 +77,7 @@ struct Session {
 struct AppState {
     settings: Mutex<Settings>,
     store: meetings::Store,
+    startup: startup::Coordinator,
     server: Mutex<Option<engine::Server>>,
     session: Mutex<Option<Session>>,
     levels: Arc<audio::Levels>,
@@ -105,8 +107,12 @@ fn settings(app: &AppHandle) -> Settings {
 }
 
 /// Runs blocking work off the UI thread.
-async fn blocking<T: Send + 'static>(work: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
-    tauri::async_runtime::spawn_blocking(work).await.map_err(|e| e.to_string())?
+async fn blocking<T: Send + 'static>(
+    work: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(work)
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 // ---------- settings ----------
@@ -156,7 +162,11 @@ fn engine_info(app: &AppHandle) -> EngineInfo {
         pack: s.pack,
         model: s.model,
         provider: s.provider,
-        cloud_keys: cloud::PROVIDERS.iter().filter(|p| cloud::has_key(p)).map(|p| p.id).collect(),
+        cloud_keys: cloud::PROVIDERS
+            .iter()
+            .filter(|p| cloud::has_key(p))
+            .map(|p| p.id)
+            .collect(),
     }
 }
 
@@ -172,7 +182,10 @@ async fn install_engine(app: AppHandle, pack: String, model: String) -> Result<E
     let progress_app = app.clone();
     blocking(move || {
         engine::install(p, m, &mut |item, done, total| {
-            let _ = progress_app.emit("engine-progress", json!({ "item": item, "done": done, "total": total }));
+            let _ = progress_app.emit(
+                "engine-progress",
+                json!({ "item": item, "done": done, "total": total }),
+            );
         })
     })
     .await?;
@@ -190,7 +203,11 @@ async fn install_engine(app: AppHandle, pack: String, model: String) -> Result<E
 
 /// Checks and stores a cloud provider's key, then transcribes with it.
 #[tauri::command]
-async fn set_cloud_key(app: AppHandle, provider: String, key: String) -> Result<EngineInfo, String> {
+async fn set_cloud_key(
+    app: AppHandle,
+    provider: String,
+    key: String,
+) -> Result<EngineInfo, String> {
     let p = cloud::provider(&provider).ok_or("unknown provider")?;
     blocking(move || cloud::set_key(p, &key)).await?;
     use_cloud(app, provider)
@@ -249,12 +266,19 @@ impl Transcriber {
 }
 
 /// The transcriber for the current settings; "engine" when none is set up.
-fn transcriber(app: &AppHandle) -> Result<Transcriber, String> {
+fn transcriber(
+    app: &AppHandle,
+    attempt: &startup::Guard<'_>,
+    progress: &mut dyn FnMut(&str),
+) -> Result<Transcriber, String> {
+    attempt.check()?;
     let s = settings(app);
     match s.mode() {
-        "local" => ensure_server(app).map(Transcriber::Local),
+        "local" => ensure_server(app, attempt, progress).map(Transcriber::Local),
         "cloud" => {
-            let p = cloud::provider(&s.provider).filter(|p| cloud::has_key(p)).ok_or("engine")?;
+            let p = cloud::provider(&s.provider)
+                .filter(|p| cloud::has_key(p))
+                .ok_or("engine")?;
             Ok(Transcriber::Cloud(p))
         }
         _ => Err("engine".into()),
@@ -262,22 +286,40 @@ fn transcriber(app: &AppHandle) -> Result<Transcriber, String> {
 }
 
 /// Starts (or reuses) the whisper server for the current settings.
-fn ensure_server(app: &AppHandle) -> Result<u16, String> {
+fn ensure_server(
+    app: &AppHandle,
+    attempt: &startup::Guard<'_>,
+    progress: &mut dyn FnMut(&str),
+) -> Result<u16, String> {
     let s = settings(app);
     let status = engine::status();
-    let pack = engine::pack(&s.pack).filter(|p| status.packs.contains(&p.id)).ok_or("engine")?;
-    let model = engine::model(&s.model).filter(|m| status.models.contains(&m.id)).ok_or("engine")?;
-    let key = (pack.id.to_string(), model.id.to_string(), s.transcription_language.clone());
+    let pack = engine::pack(&s.pack)
+        .filter(|p| status.packs.contains(&p.id))
+        .ok_or("engine")?;
+    let model = engine::model(&s.model)
+        .filter(|m| status.models.contains(&m.id))
+        .ok_or("engine")?;
+    let key = (
+        pack.id.to_string(),
+        model.id.to_string(),
+        s.transcription_language.clone(),
+    );
     let state = app.state::<AppState>();
     let mut server = state.server.lock().unwrap();
-    if let Some(running) = server.as_ref() {
-        if running.key == key {
+    if let Some(running) = server.as_mut() {
+        if running.key == key && running.ready() {
             return Ok(running.port);
         }
     }
     *server = None;
     let _ = app.emit("engine-loading", true);
-    let started = engine::Server::start(pack, model, &s.transcription_language);
+    let started = engine::Server::start(
+        pack,
+        model,
+        &s.transcription_language,
+        attempt.flag(),
+        progress,
+    );
     let _ = app.emit("engine-loading", false);
     let started = started?;
     if pack.id == "cuda" && !started.on_gpu {
@@ -326,7 +368,13 @@ fn update_meeting(
 
 #[tauri::command]
 fn delete_meeting(state: State<AppState>, id: String) -> Result<(), String> {
-    if state.session.lock().unwrap().as_ref().is_some_and(|s| s.id == id) {
+    if state
+        .session
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|s| s.id == id)
+    {
         return Err("recording".into());
     }
     state.store.delete(&id)
@@ -341,69 +389,111 @@ fn emit_state(app: &AppHandle, id: &str, phase: &str) {
 /// Starts recording into a meeting; returns warnings such as a missing
 /// microphone.
 #[tauri::command]
-async fn start_recording(app: AppHandle, id: String) -> Result<Vec<String>, String> {
+async fn start_recording(
+    app: AppHandle,
+    id: String,
+    request_id: String,
+) -> Result<Vec<String>, String> {
     blocking(move || {
         let state = app.state::<AppState>();
         if state.session.lock().unwrap().is_some() {
             return Err("already recording".into());
         }
+        let attempt = state.startup.begin(&request_id)?;
+        let mut progress = |stage: &str| {
+            let _ = app.emit(
+                "recording-preparation",
+                json!({ "id": id, "requestId": request_id, "stage": stage }),
+            );
+        };
+        progress("checking");
         let meeting = state.store.get(&id)?;
-        let transcriber = transcriber(&app)?;
+        let transcriber = transcriber(&app, &attempt, &mut progress)?;
+        attempt.check()?;
+        progress("audio");
         let language = settings(&app).transcription_language;
 
         let (tx, rx) = mpsc::channel::<audio::Segment>();
-        let recorder = audio::Recorder::start(tx, state.levels.clone())?;
-        let warnings = recorder.warnings.clone();
+        let mut recorder = Some(audio::Recorder::start(tx, state.levels.clone())?);
+        let warnings = recorder.as_ref().unwrap().warnings.clone();
         let offset_ms = meeting.duration_ms;
 
-        // Transcribes segments in order of arrival; ends when the recorder's
-        // streams are gone and the channel closes.
-        let worker = {
-            let (app, id) = (app.clone(), id.clone());
-            std::thread::spawn(move || {
-                for segment in rx {
-                    match transcriber.transcribe(&segment.samples, &language) {
-                        Ok(Some(text)) => {
-                            let line = meetings::Line {
-                                ms: offset_ms + segment.start_ms,
-                                who: if segment.who == audio::Who::Me { "me" } else { "them" }.into(),
-                                text,
-                            };
-                            let saved = app.state::<AppState>().store.update(&id, |m| {
-                                m.transcript.push(line.clone());
-                                m.transcript.sort_by_key(|l| l.ms);
-                            });
-                            if saved.is_ok() {
-                                let _ = app.emit("transcript", json!({ "id": id, "line": line }));
+        let committed = attempt.commit(|| {
+            // Transcribes segments in order of arrival; ends when the recorder's
+            // streams are gone and the channel closes.
+            let worker = {
+                let (app, id) = (app.clone(), id.clone());
+                std::thread::spawn(move || {
+                    for segment in rx {
+                        match transcriber.transcribe(&segment.samples, &language) {
+                            Ok(Some(text)) => {
+                                let line = meetings::Line {
+                                    ms: offset_ms + segment.start_ms,
+                                    who: if segment.who == audio::Who::Me {
+                                        "me"
+                                    } else {
+                                        "them"
+                                    }
+                                    .into(),
+                                    text,
+                                };
+                                let saved = app.state::<AppState>().store.update(&id, |m| {
+                                    m.transcript.push(line.clone());
+                                    m.transcript.sort_by_key(|l| l.ms);
+                                });
+                                if saved.is_ok() {
+                                    let _ =
+                                        app.emit("transcript", json!({ "id": id, "line": line }));
+                                }
+                            }
+                            Ok(None) => {}
+                            Err(e) => {
+                                let _ = app.emit("transcribe-error", e);
                             }
                         }
-                        Ok(None) => {}
-                        Err(e) => {
-                            let _ = app.emit("transcribe-error", e);
-                        }
                     }
-                }
-            })
-        };
+                })
+            };
 
-        let levels_stop = Arc::new(AtomicBool::new(false));
-        {
-            let (app, stop, levels) = (app.clone(), levels_stop.clone(), state.levels.clone());
-            std::thread::spawn(move || {
-                while !stop.load(Ordering::Relaxed) {
-                    let (me, them) = levels.get();
-                    let _ = app.emit("levels", json!({ "me": me, "them": them }));
-                    std::thread::sleep(Duration::from_millis(100));
-                }
+            let levels_stop = Arc::new(AtomicBool::new(false));
+            {
+                let (app, stop, levels) = (app.clone(), levels_stop.clone(), state.levels.clone());
+                std::thread::spawn(move || {
+                    while !stop.load(Ordering::Relaxed) {
+                        let (me, them) = levels.get();
+                        let _ = app.emit("levels", json!({ "me": me, "them": them }));
+                        std::thread::sleep(Duration::from_millis(100));
+                    }
+                });
+            }
+
+            *state.session.lock().unwrap() = Some(Session {
+                id: id.clone(),
+                recorder: recorder.take().unwrap(),
+                worker,
+                started: Instant::now(),
+                offset_ms,
+                levels_stop,
             });
+            emit_state(&app, &id, "recording");
+        });
+        if let Err(error) = committed {
+            if let Some(recorder) = recorder {
+                recorder.stop();
+            }
+            state.levels.reset();
+            return Err(error);
         }
-
-        *state.session.lock().unwrap() =
-            Some(Session { id: id.clone(), recorder, worker, started: Instant::now(), offset_ms, levels_stop });
-        emit_state(&app, &id, "recording");
         Ok(warnings)
     })
     .await
+}
+
+/// Cancellation does not need the engine mutex, so it stays responsive while a
+/// model is loading. A committed recording is stopped through stop_recording.
+#[tauri::command]
+fn cancel_recording_start(state: State<AppState>, request_id: String) -> bool {
+    state.startup.cancel(&request_id)
 }
 
 /// Stops, waits for the last segments to be transcribed, saves the length.
@@ -411,14 +501,21 @@ async fn start_recording(app: AppHandle, id: String) -> Result<Vec<String>, Stri
 async fn stop_recording(app: AppHandle) -> Result<meetings::Meeting, String> {
     blocking(move || {
         let state = app.state::<AppState>();
-        let session = state.session.lock().unwrap().take().ok_or("not recording")?;
+        let session = state
+            .session
+            .lock()
+            .unwrap()
+            .take()
+            .ok_or("not recording")?;
         emit_state(&app, &session.id, "finishing");
         session.levels_stop.store(true, Ordering::Relaxed);
         let elapsed = session.started.elapsed().as_millis() as u64;
         session.recorder.stop();
         let _ = session.worker.join();
         state.levels.reset();
-        let meeting = state.store.update(&session.id, |m| m.duration_ms = session.offset_ms + elapsed);
+        let meeting = state
+            .store
+            .update(&session.id, |m| m.duration_ms = session.offset_ms + elapsed);
         emit_state(&app, &session.id, "idle");
         meeting
     })
@@ -487,20 +584,32 @@ async fn enhance(app: AppHandle, id: String) -> Result<meetings::Meeting, String
 /// Opens the Skale Club website in the default browser.
 #[tauri::command]
 fn open_site() {
-    let _ = Command::new("explorer.exe").arg("https://skale.club").spawn();
+    let _ = Command::new("explorer.exe")
+        .arg("https://skale.club")
+        .spawn();
 }
 /// Writes Markdown to `Data/exports` beside the exe and shows it in Explorer.
 #[tauri::command]
 fn save_export(name: String, markdown: String) -> Result<String, String> {
     let safe: String = name
         .chars()
-        .map(|c| if c.is_alphanumeric() || " -_".contains(c) { c } else { '-' })
+        .map(|c| {
+            if c.is_alphanumeric() || " -_".contains(c) {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect::<String>()
         .trim()
         .chars()
         .take(80)
         .collect();
-    let base = if safe.is_empty() { "meeting".to_string() } else { safe };
+    let base = if safe.is_empty() {
+        "meeting".to_string()
+    } else {
+        safe
+    };
     let dir = portable::data_dir().join("exports");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let mut path = dir.join(format!("{base}.md"));
@@ -510,7 +619,9 @@ fn save_export(name: String, markdown: String) -> Result<String, String> {
         n += 1;
     }
     fs::write(&path, markdown).map_err(|e| e.to_string())?;
-    let _ = Command::new("explorer.exe").arg(format!("/select,{}", path.display())).spawn();
+    let _ = Command::new("explorer.exe")
+        .arg(format!("/select,{}", path.display()))
+        .spawn();
     Ok(path.display().to_string())
 }
 
@@ -533,7 +644,13 @@ async fn install_update(app: AppHandle) -> Result<(), String> {
     if app.state::<AppState>().session.lock().unwrap().is_some() {
         return Err("recording".into());
     }
-    let update = app.state::<AppState>().update.lock().unwrap().clone().ok_or("no update")?;
+    let update = app
+        .state::<AppState>()
+        .update
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or("no update")?;
     blocking(move || updater::install(&update)).await?;
     app.exit(0);
     Ok(())
@@ -547,6 +664,7 @@ fn main() {
         .manage(AppState {
             settings: Mutex::new(load_settings()),
             store: meetings::Store::default(),
+            startup: startup::Coordinator::default(),
             server: Mutex::new(None),
             session: Mutex::new(None),
             levels: Arc::new(audio::Levels::default()),
@@ -568,6 +686,7 @@ fn main() {
             update_meeting,
             delete_meeting,
             start_recording,
+            cancel_recording_start,
             stop_recording,
             recording_state,
             has_api_key,
@@ -584,6 +703,7 @@ fn main() {
         .run(|app, event| {
             if let RunEvent::Exit = event {
                 let state = app.state::<AppState>();
+                state.startup.cancel_current();
                 if let Some(session) = state.session.lock().unwrap().take() {
                     session.levels_stop.store(true, Ordering::Relaxed);
                     session.recorder.stop();

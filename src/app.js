@@ -32,6 +32,7 @@ let meeting = null;         // the open meeting
 let view = 'welcome';       // welcome | meeting | setup | settings
 let recording = null;       // { id, phase: starting | recording | finishing, since, base, lines }
 let engineLoading = false;
+let startupRequestId = null;
 let notesTab = 'mine';
 let enhancing = null;       // { id, text } while notes stream in
 let hasKey = false;
@@ -262,19 +263,31 @@ async function open(id) {
 }
 
 async function startRecording() {
+  if (recording) return;
   if (!engineReady()) { view = 'setup'; render(); return; }
-  recording = { id: meeting.id, phase: 'starting', since: Date.now(), base: meeting.durationMs, lines: meeting.transcript.length };
-  renderHead();
-  renderSidebar();
+  const target = meeting;
+  const requestId = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  startupRequestId = requestId;
+  recording = { id: target.id, phase: 'starting', since: Date.now(), base: target.durationMs, lines: target.transcript.length };
+  window.XnotePreparation.begin({ requestId, id:target.id, title:target.title || t('untitled'), mode:engine.mode,
+    onCancel: (id) => invoke('cancel_recording_start', { requestId:id }), onRetry: async () => { if (meeting?.id !== target.id) await open(target.id); if (meeting?.id === target.id) return startRecording(); } });
+  renderHead(); renderSidebar();
   try {
-    const warnings = await invoke('start_recording', { id: meeting.id });
+    const warnings = await invoke('start_recording', { id: target.id, requestId });
+    // The command result is also authoritative if an event was missed.
+    if (startupRequestId !== requestId) return;
+    if (recording && recording.phase === 'starting') { recording.phase = 'recording'; recording.since = Date.now(); }
+    engineLoading = false;
+    window.XnotePreparation.done(requestId);
+    renderHead(); renderSidebar();
     if (warnings.length) toast(t('audioWarning', { w: warnings.join('; ') }));
   } catch (e) {
-    recording = null;
-    if (String(e) === 'engine') { view = 'setup'; render(); return; }
-    toast(explain(e));
-    renderHead();
-    renderSidebar();
+    if (startupRequestId !== requestId) return;
+    recording = null; engineLoading = false;
+    if (String(e) === 'startup_cancelled') window.XnotePreparation.close();
+    else if (String(e) === 'engine') { window.XnotePreparation.close(); view = 'setup'; render(); return; }
+    else window.XnotePreparation.fail(requestId, String(e));
+    renderHead(); renderSidebar();
   }
 }
 
@@ -593,6 +606,7 @@ viewEl.addEventListener('click', (e) => {
 });
 
 listen('recording-state', ({ payload }) => {
+  if (payload.phase === 'recording' && recording?.id === payload.id && startupRequestId) window.XnotePreparation.done(startupRequestId);
   if (payload.phase === 'idle') recording = null;
   else if (recording && recording.id === payload.id) {
     if (payload.phase === 'recording' && recording.phase !== 'recording') recording.since = Date.now();
@@ -603,6 +617,8 @@ listen('recording-state', ({ payload }) => {
   if (view === 'meeting') renderHead();
   renderSidebar();
 });
+
+listen('recording-preparation', ({ payload }) => window.XnotePreparation.update(payload));
 
 listen('engine-loading', ({ payload }) => { engineLoading = payload; renderHead(); });
 listen('gpu-fallback', () => toast(t('gpuFallback')));

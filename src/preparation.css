@@ -1,0 +1,30 @@
+/* Stage-based recording preparation, using the established Skale Club palette. */
+.preparation { flex: none; margin: 16px 28px 0; padding: 16px 18px 13px; background: var(--card); border: 1px solid rgba(81,115,214,.45); border-radius: 12px; }
+.preparation[hidden] { display: none; }
+.prep-head { display: flex; align-items: center; gap: 12px; }
+.prep-head > img { width: 34px; height: 34px; object-fit: contain; flex: none; }
+.prep-copy { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.prep-copy b { font-size: 14px; font-weight: 600; }
+.prep-copy > span { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prep-time { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.prep-actions { display: flex; gap: 8px; }
+.prep-caption { display: flex; justify-content: space-between; gap: 14px; margin: 14px 0 7px; color: var(--brand-soft); font-size: 12px; }
+.prep-caption > span:last-child { color: var(--muted); white-space: nowrap; }
+.prep-track { height: 7px; background: rgba(143,169,238,.13); border-radius: 5px; overflow: hidden; }
+.prep-track > i { display: block; height: 100%; background: var(--brand); border-radius: inherit; transition: width .3s ease; }
+.prep-steps { display: flex; justify-content: space-between; gap: 12px; list-style: none; padding: 0; margin: 8px 0 0; color: var(--faint); font-size: 11px; }
+.prep-steps .done { color: var(--brand-soft); }
+.prep-steps .current { color: var(--fg); }
+.prep-not-recording { color: var(--muted); margin: 10px 0 0; font-size: 12px; }
+.prep-wait { color: var(--muted); margin: 6px 0 0; font-size: 12px; max-width: 800px; }
+.prep-error p { margin: 10px 0 6px; }
+.prep-error { color: #ff9aa6; font-size: 13px; }
+.prep-error details { color: var(--muted); font-size: 12px; }
+.prep-error pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 140px; overflow-y: auto; font: 12px/1.5 Consolas, monospace; }
+.preparation.has-error { border-color: rgba(255,84,104,.45); }
+.preparation.has-error .prep-track > i { background: var(--rec); }
+.preparation.complete .prep-track > i { background: var(--good); }
+.preparation.complete .prep-caption { color: var(--good); }
+.prep-actions button:focus-visible { outline: 2px solid var(--brand-soft); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .prep-track > i { transition: none; } }
+@media (max-width: 1050px) { .prep-steps { flex-wrap: wrap; justify-content: flex-start; } .prep-time { display: none; } }

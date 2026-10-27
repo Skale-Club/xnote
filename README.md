@@ -10,60 +10,10 @@ decisions and tasks.
 
 ## Availability
 
-**Status checked October 26, 2026:** version 0.1.0 is in source control; no GitHub Release or
-downloadable executable has been published. This repository is currently **private** and requires
-access to [Skale-Club/xnote](https://github.com/Skale-Club/xnote). Use the [build
-instructions](docs/DEVELOPMENT.md) until a release is available. Future binaries belong in
+**Status checked October 27, 2026:** source version 0.1.1. No GitHub Release or
+publicly downloadable executable has been published. Build from source using the
+[development guide](docs/DEVELOPMENT.md). Future release binaries belong in
 [Releases](https://github.com/Skale-Club/xnote/releases).
-
-The built-in updater uses unauthenticated GitHub requests. It cannot retrieve private releases, even
-if you are signed into GitHub in your browser.
-
-## Run it
-
-Use a Windows PC with Microsoft Edge WebView2 Runtime and a writable folder for the executable. No
-app installer is required. Open `Xnote.exe`, choose a transcription mode and set the app and meeting
-languages in Settings. The interface supports English, Portuguese and Spanish.
-
-### Choose transcription
-
-| Mode | Requirements | What leaves the computer |
-|---|---|---|
-| Local | One-time engine and model download; CPU or compatible NVIDIA GPU | Audio stays on the computer during transcription |
-| Groq | Internet and a Groq API key with access to the configured model | Speech-segment audio goes to Groq |
-| OpenAI | Internet and an OpenAI API key with access to the configured model | Speech-segment audio goes to OpenAI |
-
-Local mode uses whisper.cpp with a CPU build or a CUDA 12.4 NVIDIA build. Choose the larger
-large-v3-turbo model or the smaller small model in setup. The app verifies downloaded files with
-pinned SHA-256 hashes. Processing speed depends on the hardware and model; CPU transcription can lag
-behind a call. Once the files are installed, local transcription does not require a cloud key.
-Enhanced notes still use the OpenAI API, even when transcription is local.
-
-For cloud mode, choose the provider and enter its key in setup. The app checks the key by requesting
-the provider's model list before saving it. This checks authentication, not successful
-transcription, billing or access to a particular model. You can change transcription mode in
-Settings.
-
-### Take meeting notes
-
-1. Choose **New meeting**. Let participants know that you are transcribing the call.
-2. Make sure the call uses the same microphone and output device selected as    Windows defaults.
-   Xnote captures those devices when recording starts.
-3. Choose **Start recording** and write your own notes. The transcript labels    microphone audio
-   **You** and computer-output audio **Them**.
-4. Choose **Stop** and wait for pending segments to finish. If new transcript    text was added and
-   an OpenAI key is configured, enhanced notes start    automatically. Without that key, your notes
-   and transcript remain available.
-5. Use **Enhance notes** or **Regenerate** to generate them manually, then    **Copy** or **Export
-   .md** to share the result.
-
-You can stop and resume within the same meeting. Enhanced notes can also be generated from written
-notes without recording. Review generated decisions, names and tasks before sharing.
-
-## Enhanced notes and API usage
-
-Add an OpenAI API key in Settings. The same key is used if you choose OpenAI for cloud
-transcription. A Groq key only enables Groq transcription; it does not enable enhanced notes.
 
 The app calls the OpenAI Responses API directly; it does not sign into the ChatGPT website. API
 usage has [separate billing from a ChatGPT
@@ -118,6 +68,21 @@ secure erasure.
 - **No automatic update:** no release is published yet, and private release   access is unsupported
   by the current updater.
 
+## Recording preparation
+
+Starting a recording shows an inline progress bar: check setup, load the local model,
+connect to the engine, then prepare audio. Cloud mode skips the local model/engine
+steps. The bar counts completed stages; it does not invent a model-download percentage.
+Elapsed time and the message **Recording has not started yet** stay visible while
+preparation runs, and notes remain editable.
+
+You can cancel preparation, retry after a failure, or inspect the bounded technical
+details. Cancellation cannot silently start a recording afterwards. The local engine
+is accepted only when its HTTP `/health` endpoint reports ready; a listening port alone
+does not count. Startup still allows up to three minutes, so slow storage or blocked
+local connections can still cause a wait. The engine/model remain in the portable
+`Data/engine` folder; this change does not introduce an SSD model cache.
+
 ## Development
 
 Tauri 2, Rust and plain HTML/CSS/JavaScript. See the [development and release
@@ -125,10 +90,12 @@ guide](docs/DEVELOPMENT.md) for prerequisites, clone, build, test and signed-rel
 
 ## Português
 
+A preparação da gravação mostra uma barra por etapas, tempo decorrido, cancelamento e nova tentativa. O aviso informa quando a gravação ainda não começou.
+
 O Xnote transcreve reuniões e organiza anotações com IA. Captura o microfone e a saída de áudio
 padrão do Windows; funciona junto de apps de chamada sem inserir um robô na reunião.
 
-- **Disponibilidade:** em 26/10/2026, o repositório é privado e não há release   nem executável
+- **Disponibilidade:** em 27/10/2026, o repositório é privado e não há release   nem executável
   publicado. Pessoas com acesso podem [compilar o app](docs/DEVELOPMENT.md).
 - **Transcrição:** escolha processamento local com whisper.cpp ou nuvem com   Groq/OpenAI. No modo
   local, o áudio permanece no computador; na nuvem, os   trechos de áudio são enviados ao provedor.
@@ -147,10 +114,12 @@ padrão do Windows; funciona junto de apps de chamada sem inserir um robô na re
 
 ## Español
 
+La preparación muestra una barra por etapas, tiempo transcurrido, cancelación y reintento. Un aviso indica que la grabación aún no ha comenzado.
+
 Xnote transcribe reuniones y organiza apuntes con IA. Captura el micrófono y la salida de audio
 predeterminada de Windows, sin añadir un bot a la llamada.
 
-- **Disponibilidad:** al 26/10/2026, el repositorio es privado y no hay release   ni ejecutable
+- **Disponibilidad:** al 27/10/2026, el repositorio es privado y no hay release   ni ejecutable
   publicado. Quienes tengan acceso pueden [compilar la app](docs/DEVELOPMENT.md).
 - **Transcripción:** local con whisper.cpp o en la nube con Groq/OpenAI. El modo   local procesa el
   audio en el equipo; la nube envía segmentos al proveedor.
@@ -169,20 +138,22 @@ predeterminada de Windows, sin añadir un bot a la llamada.
 
 ## Skale Club apps
 
-These Windows apps belong to the [Skale-Club organization](https://github.com/Skale-Club). They
-share a dark navy interface, blue accents and English, Portuguese and Spanish UI text. Each app has
-its own executable and data folder.
+These Windows apps belong to the [Skale-Club organization](https://github.com/Skale-Club).
+They share navy interfaces, blue accents, transparent product symbols, and English,
+Portuguese and Spanish UI text. Each app has its own executable and portable Data folder.
 
 | App | Purpose |
-|---|---|
+| --- | --- |
 | [Xink](https://github.com/Skale-Club/xink) | Draw over the screen during presentations or recordings |
 | [Xpecs](https://github.com/Skale-Club/xpecs) | Inspect hardware, live sensors and benchmark results |
-| [Xcare](https://github.com/Skale-Club/xcare) | Review PC maintenance, clean selected files and manage startup programs |
-| [Xnote](https://github.com/Skale-Club/xnote) | Transcribe meeting audio and turn notes into summaries and tasks |
+| [Xcare](https://github.com/Skale-Club/xcare) | Clean selected files, manage startup programs and explicitly remove stubborn files |
+| [Xnote](https://github.com/Skale-Club/xnote) | Transcribe meetings and turn notes into summaries and tasks |
+| [Xpace](https://github.com/Skale-Club/xpace) | Analyze disk usage with a folder tree, treemap, largest files and file-type totals |
 
-Xnote currently requires repository access. Report problems through the relevant repository's Issues
-tab, including the app version, Windows version and steps to reproduce. Remove personal information
-from reports and transcripts before sharing.
+Repository access may be required depending on project visibility. Report problems through the
+relevant repository, including app version, Windows version and reproduction steps. Remove
+personal information from reports and transcripts before sharing.
+
 
 ---
 

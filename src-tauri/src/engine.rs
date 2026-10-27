@@ -9,7 +9,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::fs::{self, File};
 use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::net::TcpListener;
 use std::os::windows::io::AsRawHandle;
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -105,8 +105,16 @@ pub struct Status {
 pub fn status() -> Status {
     Status {
         gpu: has_nvidia(),
-        packs: PACKS.iter().filter(|p| pack_dir(p).join(".ok").exists()).map(|p| p.id).collect(),
-        models: MODELS.iter().filter(|m| model_path(m).exists()).map(|m| m.id).collect(),
+        packs: PACKS
+            .iter()
+            .filter(|p| pack_dir(p).join(".ok").exists())
+            .map(|p| p.id)
+            .collect(),
+        models: MODELS
+            .iter()
+            .filter(|m| model_path(m).exists())
+            .map(|m| m.id)
+            .collect(),
     }
 }
 
@@ -120,9 +128,17 @@ fn agent() -> ureq::Agent {
 
 /// Downloads `url` to `dest`, verifying SHA-256 on the way. `progress` gets
 /// (bytes done, bytes total) a few times a second.
-fn download(url: &str, dest: &Path, sha256: &str, progress: &mut dyn FnMut(u64, u64)) -> Result<(), String> {
+fn download(
+    url: &str,
+    dest: &Path,
+    sha256: &str,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<(), String> {
     let response = agent().get(url).call().map_err(|e| e.to_string())?;
-    let total = response.header("Content-Length").and_then(|v| v.parse().ok()).unwrap_or(0);
+    let total = response
+        .header("Content-Length")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
     fs::create_dir_all(dest.parent().unwrap()).map_err(|e| e.to_string())?;
     let part = dest.with_extension("part");
     let mut file = File::create(&part).map_err(|e| e.to_string())?;
@@ -160,7 +176,10 @@ fn extract(zip_path: &Path, dir: &Path) -> Result<(), String> {
     fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
-        let Some(name) = Path::new(entry.name()).file_name().map(|n| n.to_string_lossy().into_owned()) else {
+        let Some(name) = Path::new(entry.name())
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+        else {
             continue;
         };
         let lower = name.to_lowercase();
@@ -173,25 +192,41 @@ fn extract(zip_path: &Path, dir: &Path) -> Result<(), String> {
     if !dir.join("whisper-server.exe").exists() {
         return Err("whisper-server.exe missing from the download".into());
     }
-    File::create(dir.join(".ok")).map(|_| ()).map_err(|e| e.to_string())
+    File::create(dir.join(".ok"))
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 /// Installs a pack and a model that aren't there yet. `progress` gets
 /// ("engine" | "model", done, total).
-pub fn install(pack: &Pack, model: &Model, progress: &mut dyn FnMut(&str, u64, u64)) -> Result<(), String> {
+pub fn install(
+    pack: &Pack,
+    model: &Model,
+    progress: &mut dyn FnMut(&str, u64, u64),
+) -> Result<(), String> {
     let dir = pack_dir(pack);
     if !dir.join(".ok").exists() {
         let zip = engine_dir().join(pack.file);
-        let url = format!("https://github.com/ggml-org/whisper.cpp/releases/download/{BUILD}/{}", pack.file);
-        download(&url, &zip, pack.sha256, &mut |d, t| progress("engine", d, t))?;
+        let url = format!(
+            "https://github.com/ggml-org/whisper.cpp/releases/download/{BUILD}/{}",
+            pack.file
+        );
+        download(&url, &zip, pack.sha256, &mut |d, t| {
+            progress("engine", d, t)
+        })?;
         let result = extract(&zip, &dir);
         let _ = fs::remove_file(&zip);
         result?;
     }
     let path = model_path(model);
     if !path.exists() {
-        let url = format!("https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{}", model.file);
-        download(&url, &path, model.sha256, &mut |d, t| progress("model", d, t))?;
+        let url = format!(
+            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{}",
+            model.file
+        );
+        download(&url, &path, model.sha256, &mut |d, t| {
+            progress("model", d, t)
+        })?;
     }
     Ok(())
 }
@@ -220,7 +255,12 @@ struct JobLimits {
 #[link(name = "kernel32")]
 extern "system" {
     fn CreateJobObjectW(attributes: *mut std::ffi::c_void, name: *const u16) -> isize;
-    fn SetInformationJobObject(job: isize, class: i32, info: *mut std::ffi::c_void, len: u32) -> i32;
+    fn SetInformationJobObject(
+        job: isize,
+        class: i32,
+        info: *mut std::ffi::c_void,
+        len: u32,
+    ) -> i32;
     fn AssignProcessToJobObject(job: isize, process: isize) -> i32;
     fn CloseHandle(handle: isize) -> i32;
 }
@@ -234,7 +274,10 @@ fn kill_with_us(child: &Child) -> isize {
         if job == 0 {
             return 0;
         }
-        let mut limits = JobLimits { flags: KILL_ON_JOB_CLOSE, ..Default::default() };
+        let mut limits = JobLimits {
+            flags: KILL_ON_JOB_CLOSE,
+            ..Default::default()
+        };
         SetInformationJobObject(
             job,
             EXTENDED_LIMITS,
@@ -268,21 +311,86 @@ impl Drop for Server {
 
 fn free_port() -> Result<u16, String> {
     let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
-    listener.local_addr().map(|a| a.port()).map_err(|e| e.to_string())
+    listener
+        .local_addr()
+        .map(|a| a.port())
+        .map_err(|e| e.to_string())
+}
+
+// HTTP readiness is stronger than merely finding an open TCP port. The pinned
+// whisper.cpp build exposes /health with status=ok only after model initialization.
+fn health_agent() -> ureq::Agent {
+    ureq::AgentBuilder::new()
+        .try_proxy_from_env(false)
+        .timeout_connect(Duration::from_millis(300))
+        .timeout_read(Duration::from_millis(500))
+        .timeout_write(Duration::from_millis(300))
+        .timeout(Duration::from_millis(900))
+        .build()
+}
+
+fn probe_health(agent: &ureq::Agent, port: u16) -> Result<bool, String> {
+    match agent.get(&format!("http://127.0.0.1:{port}/health")).call() {
+        Ok(response) => {
+            let body: serde_json::Value = response.into_json().map_err(|e| e.to_string())?;
+            Ok(body.get("status").and_then(|s| s.as_str()) == Some("ok"))
+        }
+        Err(ureq::Error::Status(503, _)) => Ok(false),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+fn startup_log_tail(path: &Path) -> String {
+    // Before capture starts this log contains engine/model initialization, not
+    // meeting content. Keep diagnostic output bounded in both memory and the UI.
+    use std::io::{Seek, SeekFrom};
+    let Ok(mut file) = File::open(path) else {
+        return String::new();
+    };
+    let size = file.metadata().map(|m| m.len()).unwrap_or(0);
+    let _ = file.seek(SeekFrom::Start(size.saturating_sub(4096)));
+    let mut bytes = Vec::new();
+    let _ = file.take(4096).read_to_end(&mut bytes);
+    String::from_utf8_lossy(&bytes)
+        .lines()
+        .rev()
+        .take(6)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 impl Server {
-    /// Starts the server and waits until the model is loaded and it listens.
-    pub fn start(pack: &Pack, model: &Model, language: &str) -> Result<Server, String> {
+    pub fn ready(&mut self) -> bool {
+        matches!(self.child.try_wait(), Ok(None))
+            && probe_health(&health_agent(), self.port).unwrap_or(false)
+    }
+
+    /// Progress is stage-based, never a guessed percentage. Cancellation drops
+    /// the partially initialized child and its job object before returning.
+    pub fn start(
+        pack: &Pack,
+        model: &Model,
+        language: &str,
+        cancelled: &std::sync::atomic::AtomicBool,
+        progress: &mut dyn FnMut(&str),
+    ) -> Result<Server, String> {
+        use std::sync::atomic::Ordering;
+        if cancelled.load(Ordering::Acquire) {
+            return Err("startup_cancelled".into());
+        }
+        progress("loading");
         let dir = pack_dir(pack);
         let port = free_port()?;
-        let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
-        // CPU threads still matter on the GPU build if it falls back.
+        let cores = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4);
         let threads = (cores / 2).clamp(4, 12);
-        // The server's log shows which device it picked; kept for support too.
         let log_path = engine_dir().join("server.log");
         let log = File::create(&log_path).map_err(|e| e.to_string())?;
-        let mut child = Command::new(dir.join("whisper-server.exe"))
+        let child = Command::new(dir.join("whisper-server.exe"))
             .arg("-m")
             .arg(model_path(model))
             .args(["--host", "127.0.0.1", "--port", &port.to_string()])
@@ -293,25 +401,116 @@ impl Server {
             .stderr(Stdio::from(log))
             .creation_flags(CREATE_NO_WINDOW)
             .spawn()
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| format!("engine_start_failed|{e}"))?;
         let job = kill_with_us(&child);
-        let addr: SocketAddr = ([127, 0, 0, 1], port).into();
+        let mut server = Server {
+            child,
+            job,
+            port,
+            key: (pack.id.into(), model.id.into(), language.into()),
+            on_gpu: false,
+        };
+        let agent = health_agent();
         let deadline = Instant::now() + Duration::from_secs(180);
+        let mut last_error = String::new();
+        let mut connecting = false;
         while Instant::now() < deadline {
-            if TcpStream::connect_timeout(&addr, Duration::from_millis(300)).is_ok() {
-                // The model is loaded before the server listens, so the log
-                // already names the device.
-                let on_gpu = fs::read_to_string(&log_path).map(|l| l.contains("using CUDA")).unwrap_or(false);
-                let key = (pack.id.to_string(), model.id.to_string(), language.to_string());
-                return Ok(Server { child, job, port, key, on_gpu });
+            if cancelled.load(Ordering::Acquire) {
+                return Err("startup_cancelled".into());
             }
-            if let Ok(Some(status)) = child.try_wait() {
-                return Err(format!("the transcription engine stopped ({status})"));
+            if let Ok(Some(status)) = server.child.try_wait() {
+                return Err(format!(
+                    "engine_start_failed|{status}\n{}",
+                    startup_log_tail(&log_path)
+                ));
             }
-            std::thread::sleep(Duration::from_millis(250));
+            if !connecting
+                && fs::read_to_string(&log_path)
+                    .map(|s| s.contains("model size") || s.contains("using CUDA"))
+                    .unwrap_or(false)
+            {
+                connecting = true;
+                progress("connecting");
+            }
+            match probe_health(&agent, port) {
+                Ok(true) => {
+                    if cancelled.load(Ordering::Acquire) {
+                        return Err("startup_cancelled".into());
+                    }
+                    server.on_gpu = fs::read_to_string(&log_path)
+                        .map(|l| l.contains("using CUDA"))
+                        .unwrap_or(false);
+                    return Ok(server);
+                }
+                Ok(false) => {
+                    last_error = "The engine reports that its model is not ready yet.".into()
+                }
+                Err(error) => last_error = error,
+            }
+            // Short sleep slices keep cancellation responsive between probes.
+            for _ in 0..5 {
+                if cancelled.load(Ordering::Acquire) {
+                    return Err("startup_cancelled".into());
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
         }
-        let _ = child.kill();
-        Err("the transcription engine took too long to start".into())
+        Err(format!(
+            "engine_start_timeout|{last_error}\n{}",
+            startup_log_tail(&log_path)
+        ))
+    }
+}
+
+#[cfg(test)]
+mod readiness_tests {
+    use super::*;
+    fn response(status: &str, body: &str) -> (u16, std::thread::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let data = format!("HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+        let task = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut request = [0u8; 1024];
+            let n = stream.read(&mut request).unwrap();
+            assert!(String::from_utf8_lossy(&request[..n]).starts_with("GET /health "));
+            stream.write_all(data.as_bytes()).unwrap();
+        });
+        (port, task)
+    }
+    #[test]
+    fn health_requires_an_explicit_ready_response() {
+        for (status, body, expected) in [
+            ("200 OK", r#"{"status":"ok"}"#, true),
+            (
+                "503 Service Unavailable",
+                r#"{"status":"loading model"}"#,
+                false,
+            ),
+            ("200 OK", r#"{"status":"loading model"}"#, false),
+        ] {
+            let (port, task) = response(status, body);
+            assert_eq!(probe_health(&health_agent(), port).unwrap(), expected);
+            task.join().unwrap();
+        }
+    }
+    #[test]
+    fn malformed_health_is_not_treated_as_ready() {
+        let (port, task) = response("200 OK", "not json");
+        assert!(probe_health(&health_agent(), port).is_err());
+        task.join().unwrap();
+    }
+    #[test]
+    fn an_already_cancelled_start_does_not_spawn_or_write_logs() {
+        let cancelled = std::sync::atomic::AtomicBool::new(true);
+        let mut stages = Vec::new();
+        assert!(
+            matches!(Server::start(&PACKS[1], &MODELS[1], "en", &cancelled, &mut |s| stages.push(s.to_string())), Err(e) if e == "startup_cancelled")
+        );
+        assert!(stages.is_empty());
     }
 }
 
@@ -340,7 +539,10 @@ pub(crate) fn wav(samples: &[f32]) -> Vec<u8> {
 /// Phrases Whisper tends to invent on near-silence.
 pub(crate) fn is_phantom(text: &str, seconds: f32) -> bool {
     let t = text.trim().trim_matches('.').trim().to_lowercase();
-    if t.is_empty() || (t.starts_with('[') && t.ends_with(']')) || (t.starts_with('(') && t.ends_with(')')) {
+    if t.is_empty()
+        || (t.starts_with('[') && t.ends_with(']'))
+        || (t.starts_with('(') && t.ends_with(')'))
+    {
         return true;
     }
     const PHANTOMS: [&str; 9] = [
@@ -381,16 +583,28 @@ pub(crate) fn multipart(fields: &[(&str, &str)], wav: &[u8]) -> (String, Vec<u8>
 
 /// Sends one segment to the server; None when nothing real was said.
 pub fn transcribe(port: u16, samples: &[f32], language: &str) -> Result<Option<String>, String> {
-    let fields = [("response_format", "json"), ("temperature", "0.0"), ("language", language)];
+    let fields = [
+        ("response_format", "json"),
+        ("temperature", "0.0"),
+        ("language", language),
+    ];
     let (content_type, body) = multipart(&fields, &wav(samples));
-    let response: serde_json::Value = ureq::post(&format!("http://127.0.0.1:{port}/inference"))
+    let response: serde_json::Value = ureq::AgentBuilder::new()
+        .try_proxy_from_env(false)
+        .build()
+        .post(&format!("http://127.0.0.1:{port}/inference"))
         .set("Content-Type", &content_type)
         .timeout(Duration::from_secs(300))
         .send_bytes(&body)
         .map_err(|e| e.to_string())?
         .into_json()
         .map_err(|e| e.to_string())?;
-    let text = response["text"].as_str().unwrap_or_default().split_whitespace().collect::<Vec<_>>().join(" ");
+    let text = response["text"]
+        .as_str()
+        .unwrap_or_default()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
     let seconds = samples.len() as f32 / RATE as f32;
     Ok((!is_phantom(&text, seconds)).then_some(text))
 }

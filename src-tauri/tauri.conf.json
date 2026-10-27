@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Xnote",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "identifier": "club.skale.xnote",
   "build": {
     "frontendDist": "../src"
@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Xnote · Skale Club",
+        "title": "Xnote \u00b7 Skale Club",
         "width": 1240,
         "height": 800,
         "minWidth": 980,
@@ -28,7 +28,7 @@
   "bundle": {
     "active": false,
     "publisher": "Skale Club",
-    "copyright": "© 2026 Skale Club",
+    "copyright": "\u00a9 2026 Skale Club",
     "homepage": "https://skale.club",
     "icon": [
       "icons/32x32.png",

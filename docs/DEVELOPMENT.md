@@ -26,6 +26,7 @@ the native commands.
 To check Rust code, run the included tests and build the executable:
 
 ~~~powershell
+npm run test:ui
 cargo check --manifest-path src-tauri/Cargo.toml --locked
 cargo test --manifest-path src-tauri/Cargo.toml --release --locked
 npm run build
@@ -77,9 +78,8 @@ the key outside Git and back it up securely. The current workflow supplies an em
 password; using a password-protected key requires updating the workflow's secret configuration
 first.
 
-**Readiness checked October 26, 2026:** no releases or repository-level Actions secrets were listed
-for this app. Confirm that a matching signing key is available through a repository or permitted
-organization secret before pushing a release tag.
+Before tagging a release, confirm that the repository has a signing key available through a
+repository or permitted organization secret. A normal source push does not publish a binary.
 
 For a reviewed release:
 
@@ -120,3 +120,21 @@ the build nor the release workflow creates a complete PortableApps package.
 
 Close the app before moving or backing up its folder. Xnote credentials remain in Windows Credential
 Manager and must be entered again on another PC.
+
+## Verify the Windows executable icon
+
+After a normal `npm run build`, the postbuild step checks the icon resources
+embedded in the resulting executable against `src-tauri/icons/icon.ico`. You can
+repeat the data-only check with `npm run verify:icon`. This uses Node.js, does not
+launch the app and fails if any icon frame is stale or missing. Cargo tracks icon
+inputs through `build.rs`, so updating artwork rebuilds the Windows resource library.
+See [branding](BRANDING.md) for the icon source and regeneration instructions.
+
+## Recording preparation verification
+
+The Node VM tests cover stage values, local/cloud modes, cancellation, retry,
+stale events, stale timers, HTML escaping and the actual application command-result
+fallback. Rust tests cover bounded cancellation history, cancel-before-start,
+cancel-vs-commit, request isolation and HTTP health responses using a disposable
+loopback test server. These tests do not open microphones, launch Xnote or load
+the real Whisper model. Native-device and visual acceptance remains manual.
