@@ -83,7 +83,6 @@ struct AppState {
     server: Mutex<Option<engine::Server>>,
     session: Mutex<Option<Session>>,
     levels: Arc<audio::Levels>,
-    update: Mutex<Option<updater::Update>>,
 }
 
 fn save_settings(settings: &Settings) {
@@ -632,31 +631,23 @@ fn save_export(name: String, markdown: String) -> Result<String, String> {
 
 // ---------- updates ----------
 
+/// Where the background updater stands, for the updates panel.
 #[tauri::command]
-async fn check_update(app: AppHandle) -> Option<updater::Update> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let update = updater::check().ok().flatten();
-        *app.state::<AppState>().update.lock().unwrap() = update.clone();
-        update
-    })
-    .await
-    .ok()
-    .flatten()
+fn update_status() -> updater::Status {
+    updater::status()
 }
 
+/// Looks for a newer release now; the result arrives as `update-status`.
 #[tauri::command]
-async fn install_update(app: AppHandle) -> Result<(), String> {
-    if app.state::<AppState>().session.lock().unwrap().is_some() {
-        return Err("recording".into());
-    }
-    let update = app
-        .state::<AppState>()
-        .update
-        .lock()
-        .unwrap()
-        .clone()
-        .ok_or("no update")?;
-    blocking(move || updater::install(&update)).await?;
+fn check_update() {
+    updater::check_now();
+}
+
+/// Installs the downloaded update now and restarts into it. A recording stops
+/// as it does when the window closes.
+#[tauri::command]
+fn restart_to_update(app: AppHandle) -> Result<(), String> {
+    updater::restart()?;
     app.exit(0);
     Ok(())
 }
@@ -676,7 +667,13 @@ fn main() {
             server: Mutex::new(None),
             session: Mutex::new(None),
             levels: Arc::new(audio::Levels::default()),
-            update: Mutex::new(None),
+        })
+        .setup(|app| {
+            let handle = app.handle().clone();
+            updater::start(move |status| {
+                let _ = handle.emit("update-status", status);
+            });
+            Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             get_settings,
@@ -703,8 +700,9 @@ fn main() {
             enhance,
             save_export,
             open_site,
+            update_status,
             check_update,
-            install_update
+            restart_to_update
         ])
         .build(tauri::generate_context!())
         .expect("failed to start Xnote")
@@ -717,6 +715,7 @@ fn main() {
                     session.recorder.stop();
                 }
                 *state.server.lock().unwrap() = None; // kills whisper-server
+                updater::apply(); // a downloaded update replaces the exe
             }
         });
 }

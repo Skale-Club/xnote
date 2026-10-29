@@ -1,14 +1,17 @@
-//! Self-update from GitHub Releases, for a portable exe.
+//! Self-update from GitHub Releases, for a portable exe. It is the same file
+//! in every Skale app: change it in one and copy it to the others.
 //!
-//! Each release carries the exe and `<exe>.sig`, a minisign signature made in
-//! CI with the Skale X update key (`tauri signer sign`). A download is only
-//! used if its signature matches the public key built into this app, so a
-//! tampered release or download is refused.
+//! `start` checks the app's repository now and every six hours. When the
+//! latest release is newer than this build, its exe is downloaded in the
+//! background and kept beside this one as `<name>.new.exe`, but only if it
+//! matches its `<exe>.sig`, a minisign signature made in CI with the Skale X
+//! update key (`tauri signer sign`). A tampered release or download is refused.
 //!
-//! Swapping: Windows lets a running exe be renamed, so the app renames itself
-//! to `<name>.old.exe`, puts the new file in its place and starts it with
-//! `--updated-from <pid>`. The new copy waits for the old one to exit, then
-//! deletes `<name>.old.exe`. The `Data\` folder is left alone.
+//! Swapping: Windows lets a running exe be renamed, so `apply` renames this exe
+//! to `<name>.old.exe` and puts the new file in its place. It runs when the app
+//! exits, or from `restart`, which also starts the new copy with
+//! `--updated-from <pid>`. The next start deletes `<name>.old.exe`. The `Data\`
+//! folder is left alone.
 
 use base64::Engine as _;
 use minisign_verify::{PublicKey, Signature};
@@ -16,20 +19,142 @@ use serde::{Deserialize, Serialize};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-const REPO: &str = "Skale-Club/xnote";
+const REPO: &str = concat!("Skale-Club/", env!("CARGO_PKG_NAME"));
 const PUBLIC_KEY: &str = include_str!("../updater.pub");
 const MAX_DOWNLOAD: u64 = 200 * 1024 * 1024;
 const USER_AGENT: &str = "skale-x-updater";
+const EVERY: Duration = Duration::from_secs(6 * 60 * 60);
 
+#[derive(Clone, Copy, PartialEq, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum State {
+    /// Not checked yet.
+    Idle,
+    Checking,
+    UpToDate,
+    Downloading,
+    /// Downloaded and verified: it is installed when the app closes.
+    Ready,
+    Failed,
+}
+
+/// Where the updater stands; the window shows it in its updates panel.
 #[derive(Clone, Serialize)]
-pub struct Update {
-    pub version: String,
+#[serde(rename_all = "camelCase")]
+pub struct Status {
+    /// This build's version.
+    pub current: &'static str,
+    pub state: State,
+    /// The newer release being downloaded or ready.
+    pub version: Option<String>,
+    /// Its release notes.
     pub notes: String,
-    #[serde(skip)]
+    /// Why the last check failed.
+    pub error: Option<String>,
+    /// When the last check finished, in Unix seconds.
+    pub checked_at: Option<u64>,
+}
+
+static STATUS: Mutex<Status> = Mutex::new(Status {
+    current: env!("CARGO_PKG_VERSION"),
+    state: State::Idle,
+    version: None,
+    notes: String::new(),
+    error: None,
+    checked_at: None,
+});
+static LISTENER: OnceLock<Box<dyn Fn(&Status) + Send + Sync>> = OnceLock::new();
+static BUSY: AtomicBool = AtomicBool::new(false);
+
+pub fn status() -> Status {
+    STATUS.lock().unwrap().clone()
+}
+
+fn set(change: impl FnOnce(&mut Status)) {
+    let status = {
+        let mut status = STATUS.lock().unwrap();
+        change(&mut status);
+        status.clone()
+    };
+    if let Some(listener) = LISTENER.get() {
+        listener(&status);
+    }
+}
+
+/// Starts the background checks: now, then every six hours. `on_change`
+/// hears every change of status.
+pub fn start(on_change: impl Fn(&Status) + Send + Sync + 'static) {
+    let _ = LISTENER.set(Box::new(on_change));
+    // A download left by an earlier session may be older than this build.
+    if let Ok(exe) = std::env::current_exe() {
+        let _ = std::fs::remove_file(sibling(&exe, "new"));
+    }
+    std::thread::spawn(|| loop {
+        run();
+        std::thread::sleep(EVERY);
+    });
+}
+
+/// Checks now, unless a check or download is already running.
+pub fn check_now() {
+    std::thread::spawn(run);
+}
+
+fn run() {
+    if BUSY.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let before = status();
+    let staged = before.version.clone().filter(|_| before.state == State::Ready);
+    set(|s| {
+        if s.state != State::Ready {
+            s.state = State::Checking;
+        }
+    });
+    let outcome = check().and_then(|found| match found {
+        Some(update) if Some(&update.version) != staged.as_ref() => stage(&update).map(|_| Some(update)),
+        _ => Ok(None),
+    });
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    set(|s| {
+        s.checked_at = Some(now);
+        match outcome {
+            Ok(Some(update)) => {
+                s.state = State::Ready;
+                s.version = Some(update.version);
+                s.notes = update.notes;
+                s.error = None;
+            }
+            Ok(None) => {
+                if s.state != State::Ready {
+                    s.state = State::UpToDate;
+                }
+                s.error = None;
+            }
+            Err(error) => {
+                // An update downloaded earlier is still on disk and still good.
+                if before.state == State::Ready {
+                    s.state = State::Ready;
+                    s.version = before.version;
+                    s.notes = before.notes;
+                } else {
+                    s.state = State::Failed;
+                }
+                s.error = Some(error);
+            }
+        }
+    });
+    BUSY.store(false, Ordering::SeqCst);
+}
+
+struct Update {
+    version: String,
+    notes: String,
     exe_url: String,
-    #[serde(skip)]
     sig_url: String,
 }
 
@@ -54,15 +179,18 @@ fn version(text: &str) -> Option<(u64, u64, u64)> {
 }
 
 /// The latest release, if it is newer than this build and carries a signed exe.
-pub fn check() -> Result<Option<Update>, String> {
-    let release: Release = ureq::get(&format!("https://api.github.com/repos/{REPO}/releases/latest"))
+fn check() -> Result<Option<Update>, String> {
+    let release: Release = match ureq::get(&format!("https://api.github.com/repos/{REPO}/releases/latest"))
         .set("User-Agent", USER_AGENT)
         .set("Accept", "application/vnd.github+json")
         .timeout(Duration::from_secs(10))
         .call()
-        .map_err(|e| e.to_string())?
-        .into_json()
-        .map_err(|e| e.to_string())?;
+    {
+        Ok(response) => response.into_json().map_err(|e| e.to_string())?,
+        // No release published yet.
+        Err(ureq::Error::Status(404, _)) => return Ok(None),
+        Err(e) => return Err(e.to_string()),
+    };
     let (Some(latest), Some(current)) = (version(&release.tag_name), version(env!("CARGO_PKG_VERSION"))) else {
         return Ok(None);
     };
@@ -110,25 +238,42 @@ fn sibling(exe: &Path, tag: &str) -> PathBuf {
     exe.with_file_name(format!("{stem}.{tag}.exe"))
 }
 
-/// Downloads, verifies and swaps in the new exe, then starts it. The caller
-/// must exit right after.
-pub fn install(update: &Update) -> Result<(), String> {
+/// Downloads and verifies the update, then keeps it beside the exe.
+fn stage(update: &Update) -> Result<(), String> {
+    set(|s| {
+        s.state = State::Downloading;
+        s.version = Some(update.version.clone());
+    });
     let data = download(&update.exe_url)?;
     let signature = String::from_utf8(download(&update.sig_url)?).map_err(|e| e.to_string())?;
     verify(&data, &signature)?;
-
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let (new, old) = (sibling(&exe, "new"), sibling(&exe, "old"));
-    std::fs::write(&new, &data).map_err(|e| e.to_string())?;
-    let _ = std::fs::remove_file(&old);
-    if let Err(e) = std::fs::rename(&exe, &old) {
+    let new = sibling(&std::env::current_exe().map_err(|e| e.to_string())?, "new");
+    std::fs::write(&new, &data).map_err(|e| {
         let _ = std::fs::remove_file(&new);
-        return Err(e.to_string());
+        e.to_string()
+    })
+}
+
+/// Swaps in the downloaded exe, if there is one, and returns the exe's path.
+/// Call it when the app exits.
+pub fn apply() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let (new, old) = (sibling(&exe, "new"), sibling(&exe, "old"));
+    if !new.exists() {
+        return None;
     }
-    if let Err(e) = std::fs::rename(&new, &exe) {
+    let _ = std::fs::remove_file(&old);
+    std::fs::rename(&exe, &old).ok()?;
+    if std::fs::rename(&new, &exe).is_err() {
         let _ = std::fs::rename(&old, &exe); // put the working copy back
-        return Err(e.to_string());
+        return None;
     }
+    Some(exe)
+}
+
+/// Swaps in the downloaded exe and starts it. The caller must exit right after.
+pub fn restart() -> Result<(), String> {
+    let exe = apply().ok_or("no update is ready")?;
     Command::new(&exe)
         .arg("--updated-from")
         .arg(std::process::id().to_string())
@@ -191,7 +336,12 @@ mod tests {
 
     #[test]
     fn names_siblings_next_to_the_exe() {
-        let exe = Path::new(r"C:\Apps\Xnote.exe");
-        assert_eq!(sibling(exe, "old"), PathBuf::from(r"C:\Apps\Xnote.old.exe"));
+        let exe = Path::new(r"C:\Apps\Xvert.exe");
+        assert_eq!(sibling(exe, "old"), PathBuf::from(r"C:\Apps\Xvert.old.exe"));
+    }
+
+    #[test]
+    fn checks_the_apps_own_repository() {
+        assert_eq!(REPO, format!("Skale-Club/{}", env!("CARGO_PKG_NAME")));
     }
 }

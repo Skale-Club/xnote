@@ -124,9 +124,13 @@ The existing `scripts/release.ps1` helper changes the three version manifests, c
 pushes immediately. It does not refresh lockfiles, run tests or check that signing secrets exist.
 Use the reviewed process above when preparing lockfiles or validating a first release.
 
-The updater queries GitHub without authentication, finds a newer version, verifies its signature and
-replaces the executable after the user selects the update. It retains `Data`. Release assets must be
-publicly readable for this updater to work; GitHub login in a browser does not authenticate the app.
+The updater queries GitHub without authentication when the app starts and every six hours. When
+the latest release is newer, it downloads the exe, verifies its signature and keeps it beside the
+running exe as `<name>.new.exe`. The swap happens when the app exits, or at once from the updates panel's **Restart now**.
+It retains `Data`. Release assets must be publicly readable for this updater to work; GitHub login in
+a browser does not authenticate the app. `src-tauri/src/updater.rs` is the same file in every Skale
+app, as is `src/updates.js` (the updates panel) in the apps with a window: change them in one and
+copy them to the others.
 
 Xnote is currently private. Its updater requires a public distribution endpoint or an authenticated
 update mechanism before it can deliver updates.

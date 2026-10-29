@@ -39,7 +39,6 @@ let hasKey = false;
 let search = '';
 let install = null;         // { engine: {done,total}, model: {done,total}, error }
 let setupChoice = null;     // { pack, model }
-let pendingUpdate = null;
 let saveTimer = null;
 
 // ---------- helpers ----------
@@ -528,27 +527,14 @@ function renderWelcome() {
     `<p>${esc(t('welcomeText'))}${engine?.mode === 'local' ? ` ${esc(t('welcomeLocal'))}` : ''}</p><button class="btn primary" data-act="new">${svg(ICONS.plus)}${esc(t('newMeeting'))}</button></div></div>`;
 }
 
-function renderUpdateBar() {
-  const bar = $('update-bar');
-  bar.hidden = !pendingUpdate;
-  if (!pendingUpdate) return;
-  bar.innerHTML = `<span>${esc(t('updateAvailable', { v: pendingUpdate.version }))}</span>` +
-    `<button class="btn small primary" id="update-now">${esc(t('updateNow'))}</button>`;
-  $('update-now').onclick = async (e) => {
-    e.target.disabled = true;
-    e.target.textContent = t('updating');
-    try {
-      await invoke('install_update'); // the app restarts on success
-    } catch (err) {
-      toast(t('updateFailed', { error: err }));
-      renderUpdateBar();
-    }
-  };
+// Read by updates.js before restarting into a new version.
+function updateBlocker() {
+  return recording ? t('updateStopsRecording') : '';
 }
 
 function render() {
   renderSidebar();
-  renderUpdateBar();
+  updates.render();
   if (view === 'setup' && engine) renderSetup();
   else if (view === 'settings') renderSettings();
   else if (view === 'meeting' && meeting) renderMeeting();
@@ -677,6 +663,4 @@ setInterval(tick, 500);
   [engine, hasKey, meetings] = await Promise.all([invoke('engine_status'), invoke('has_api_key'), invoke('list_meetings')]);
   view = engineReady() ? 'welcome' : 'setup';
   render();
-  window.__TAURI__.app.getVersion().then((v) => { document.querySelector('.ver').textContent = `v${v}`; });
-  invoke('check_update').then((u) => { pendingUpdate = u; renderUpdateBar(); });
 })();

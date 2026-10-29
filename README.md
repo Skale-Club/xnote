@@ -65,8 +65,8 @@ secure erasure.
   is not word-by-word live captioning.
 - **Cloud errors:** check credentials, model access, connectivity and provider   quota. No
   transcript audio archive is saved for later recovery.
-- **No automatic update:** no release is published yet, and private release   access is unsupported
-  by the current updater.
+- **Updates:** Xnote updates itself from signed GitHub Releases and installs a new version when you
+  close it. Restarting from the updates panel stops a recording in progress.
 
 ## Recording preparation
 
@@ -142,7 +142,7 @@ padrão do Windows; funciona junto de apps de chamada sem inserir um robô na re
   Credenciais. O app não salva áudio para reprodução. Os   arquivos de reunião não têm criptografia
   própria, e `store: false` não   significa retenção zero em todos os sistemas do provedor.
 - **Limites:** distingue “Você” de “Eles”, sem separar cada participante   remoto. A transcrição
-  pode atrasar. O atualizador não acessa releases privadas.
+  pode atrasar. O Xnote se atualiza sozinho e instala a versão nova quando você o fecha.
 - **Claude Code e Codex**: `Xnote.exe --mcp` roda o Xnote como servidor MCP local, sem janela, para
   assistentes de IA usarem as reuniões salvas (só leitura; o que o assistente lê vai para o provedor
   de IA dele). Veja [Use with Claude Code and Codex](#use-with-claude-code-and-codex).
@@ -169,7 +169,7 @@ predeterminada de Windows, sin añadir un bot a la llamada.
   No se guarda audio para reproducción. Los archivos no tienen   cifrado propio y `store: false` no
   equivale a retención cero en todos los   sistemas del proveedor.
 - **Límites:** distingue “Tú” y “Ellos”, sin identificar a cada participante   remoto. Puede haber
-  retrasos. El actualizador no accede a releases privadas.
+  retrasos. Xnote se actualiza solo e instala la versión nueva cuando lo cierras.
 - **Claude Code y Codex**: `Xnote.exe --mcp` ejecuta Xnote como servidor MCP local, sin ventana,
   para que asistentes de IA usen las reuniones guardadas (solo lectura; lo que lee el asistente va a
   su proveedor de IA). Consulta [Use with Claude Code and Codex](#use-with-claude-code-and-codex).

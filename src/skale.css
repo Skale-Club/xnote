@@ -1,5 +1,5 @@
 /* Skale Club shared style: the window frame, controls and surfaces common to
-   Xcare, Xnote, Xpace and Xpecs. Keep this file identical in every app (Xink's
+   Xnote, Xvert and Xpace. Keep this file identical in every app (Xink's
    toolbar uses the same values in toolbar.css); app-specific rules belong in
    style.css. Palette: navy surfaces, CTA blue #5173D6, soft blue #8FA9EE. */
 
@@ -475,7 +475,7 @@ table.kv td:first-child { color: var(--muted); width: 42%; padding-right: 16px; 
 
 /* ---------- modal & toast ---------- */
 
-#modal {
+#modal, #updates {
   position: fixed;
   inset: 0;
   z-index: 10;
@@ -486,7 +486,7 @@ table.kv td:first-child { color: var(--muted); width: 42%; padding-right: 16px; 
   backdrop-filter: blur(6px);
   animation: fade 0.18s ease;
 }
-#modal[hidden] { display: none; }
+#modal[hidden], #updates[hidden] { display: none; }
 .dialog {
   width: min(460px, 90vw);
   max-height: 85vh;
@@ -552,3 +552,57 @@ table.kv td:first-child { color: var(--muted); width: 42%; padding-right: 16px; 
   background: url("logo.png") center / contain no-repeat;
   filter: drop-shadow(0 8px 16px var(--brand-glow));
 }
+
+/* ---------- updates (updates.js) ---------- */
+
+.ver-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.ver-btn:hover { border-color: var(--line-strong); color: var(--fg); }
+.ver-btn svg.i { width: 13px; height: 13px; }
+.ver-btn.ready { border-color: rgba(143, 169, 238, 0.45); color: var(--brand-soft); }
+.ver-btn .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--brand-soft); box-shadow: 0 0 8px var(--brand-soft); }
+.updates-dialog { width: min(520px, 90vw); }
+.updates-dialog .note { margin: 0 0 14px; }
+.updates-state {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--well);
+}
+.updates-state span { color: var(--muted); font-size: 13px; }
+.updates-state.upToDate span { color: var(--good); }
+.updates-state.ready { border-color: rgba(143, 169, 238, 0.4); background: linear-gradient(90deg, rgba(81, 115, 214, 0.2), rgba(81, 115, 214, 0.05)); }
+.updates-state.ready span { color: var(--fg); }
+.updates-state.failed span { color: var(--warn); }
+.updates-state .pbar { height: 5px; margin: 8px 0 0; }
+.updates-state .pbar i { width: 35%; animation: updates-slide 1.1s ease-in-out infinite; }
+.updates-notes-title { margin: 0 0 6px; font-size: 13px; }
+.updates-notes {
+  max-height: 160px;
+  overflow-y: auto;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--well);
+  color: var(--muted);
+  font-size: 12.5px;
+  white-space: pre-line;
+}
+.updates-warning { margin: 0 0 14px !important; color: var(--warn) !important; font-size: 13px; }
+@keyframes updates-slide { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
