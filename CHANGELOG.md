@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-11-04
+
+- Internal signed downloads and updates through a stable per-app manifest endpoint.
+- Missing feeds report an error; staged packages are verified again before replacement.
+- Release automation publishes the executable, signature and latest.json together.
 
 - `Xnote.exe --mcp` runs a local MCP server (no window) for Claude Code, Codex and other MCP
   clients: list, read and search saved meetings, and the transcription setup; read-only.

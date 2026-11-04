@@ -10,10 +10,8 @@ decisions and tasks.
 
 ## Availability
 
-**Status checked October 27, 2026:** source version 0.1.1. No GitHub Release or
-publicly downloadable executable has been published. Build from source using the
-[development guide](docs/DEVELOPMENT.md). Future release binaries belong in
-[Releases](https://github.com/Skale-Club/xnote/releases).
+Signed portable builds are distributed through [Releases](https://github.com/Skale-Club/xnote/releases).
+See [internal update details](docs/INTERNAL_UPDATES.md) for the update endpoint and release process.
 
 The app calls the OpenAI Responses API directly; it does not sign into the ChatGPT website. API
 usage has [separate billing from a ChatGPT
@@ -127,8 +125,7 @@ A preparação da gravação mostra uma barra por etapas, tempo decorrido, cance
 O Xnote transcreve reuniões e organiza anotações com IA. Captura o microfone e a saída de áudio
 padrão do Windows; funciona junto de apps de chamada sem inserir um robô na reunião.
 
-- **Disponibilidade:** em 27/10/2026, o repositório é privado e não há release   nem executável
-  publicado. Pessoas com acesso podem [compilar o app](docs/DEVELOPMENT.md).
+- **Disponibilidade:** versões portáteis assinadas em [Releases](https://github.com/Skale-Club/xnote/releases). As atualizações são baixadas e aplicadas pelo próprio app.
 - **Transcrição:** escolha processamento local com whisper.cpp ou nuvem com   Groq/OpenAI. No modo
   local, o áudio permanece no computador; na nuvem, os   trechos de áudio são enviados ao provedor.
 - **Uso:** Nova reunião → Gravar → anotar → Parar. Configure a chamada com os   dispositivos padrão
@@ -154,8 +151,7 @@ La preparación muestra una barra por etapas, tiempo transcurrido, cancelación 
 Xnote transcribe reuniones y organiza apuntes con IA. Captura el micrófono y la salida de audio
 predeterminada de Windows, sin añadir un bot a la llamada.
 
-- **Disponibilidad:** al 27/10/2026, el repositorio es privado y no hay release   ni ejecutable
-  publicado. Quienes tengan acceso pueden [compilar la app](docs/DEVELOPMENT.md).
+- **Disponibilidad:** versiones portátiles firmadas en [Releases](https://github.com/Skale-Club/xnote/releases). La propia app descarga y aplica las actualizaciones.
 - **Transcripción:** local con whisper.cpp o en la nube con Groq/OpenAI. El modo   local procesa el
   audio en el equipo; la nube envía segmentos al proveedor.
 - **Uso:** Nueva reunión → Grabar → tomar apuntes → Detener. Use los dispositivos   predeterminados

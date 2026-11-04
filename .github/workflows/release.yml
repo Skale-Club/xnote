@@ -16,6 +16,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Require the existing update signing key
+        shell: pwsh
+        env:
+          UPDATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:UPDATE_KEY)) { throw 'Configure TAURI_SIGNING_PRIVATE_KEY before publishing. It must match src-tauri/updater.pub.' }
+
       - name: Check the tag matches the app version
         shell: pwsh
         run: |
@@ -34,21 +41,39 @@ jobs:
 
       - run: npm ci
 
+      - name: Test frontend flows when present
+        shell: pwsh
+        run: |
+          $tests = @(Get-ChildItem scripts -Filter *.test.cjs)
+          if ($tests.Count -gt 0) {
+            node --test @($tests.FullName)
+            if ($LASTEXITCODE -ne 0) { throw 'Frontend tests failed' }
+          }
+
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --release --locked
+
       - run: npm run build
 
       - name: Sign for the in-app updater
         shell: pwsh
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           New-Item -ItemType Directory dist | Out-Null
           Copy-Item src-tauri/target/release/xnote.exe dist/Xnote.exe
-          npx tauri signer sign dist/Xnote.exe
+          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          npx tauri signer sign --app-version $version dist/Xnote.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Signing failed' }
+          $verification = Start-Process -FilePath dist/Xnote.exe -ArgumentList @('--verify-update', 'dist/Xnote.exe', 'dist/Xnote.exe.sig') -WindowStyle Hidden -Wait -PassThru
+          if ($verification.ExitCode -ne 0) { throw 'The signing key does not match the key trusted by Xnote' }
+          node scripts/create-update-feed.cjs dist
+          if ($LASTEXITCODE -ne 0) { throw 'Update feed generation failed' }
 
       - uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/Xnote.exe
             dist/Xnote.exe.sig
+            dist/latest.json
           generate_release_notes: true

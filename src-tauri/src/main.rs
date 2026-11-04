@@ -646,13 +646,16 @@ fn check_update() {
 /// Installs the downloaded update now and restarts into it. A recording stops
 /// as it does when the window closes.
 #[tauri::command]
-fn restart_to_update(app: AppHandle) -> Result<(), String> {
+async fn restart_to_update(app: AppHandle) -> Result<(), String> {
+    let recording = app.state::<AppState>().session.lock().unwrap().is_some();
+    if recording { stop_recording(app.clone()).await?; }
     updater::restart()?;
     app.exit(0);
     Ok(())
 }
 
 fn main() {
+    if updater::verify_cli() { return; }
     updater::finish_previous();
     portable::migrate(&["xnote.json", "engine", "meetings", "exports"]);
     portable::sync_appinfo();

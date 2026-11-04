@@ -158,3 +158,6 @@ select.field { flex: none; min-width: 200px; }
 .welcome img { width: 84px; height: 84px; margin-bottom: 16px; border-radius: 22px; box-shadow: 0 0 0 1px rgba(143, 169, 238, 0.18), 0 18px 40px -10px var(--brand-glow); }
 .welcome h1 { margin: 0 0 8px; font: 700 28px/1.2 var(--font-display); letter-spacing: -0.5px; }
 .welcome p { color: var(--muted); max-width: 440px; margin: 0 auto 22px; }
+
+.updates-source { overflow-wrap: anywhere; }
+.ver.failed { color: var(--warn); border-color: rgba(245, 196, 81, .4); }

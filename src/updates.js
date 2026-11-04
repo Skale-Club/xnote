@@ -14,6 +14,7 @@ const UPDATE_TEXT = {
   en: {
     updates: 'Updates', close: 'Close', checkNow: 'Check now', restartNow: 'Restart now', restartAnyway: 'Restart anyway',
     idle: 'Not checked yet.', checking: 'Checking for updates…', upToDate: 'You have the latest version.',
+    source: 'Update source', updateFeedMissing: 'No update package has been published at the configured address.', invalidUpdateFeed: 'The update feed is invalid.', invalidUpdateSource: 'The update source must be a valid HTTPS address.', unsignedUpdate: 'The newer version has no signed update package.', updateTooLarge: 'The update exceeds the permitted size.', unavailable: 'Update checks are unavailable. Open Updates for details.',
     downloading: 'Downloading {app} {v}…', ready: '{app} {v} is ready. It installs when you close the app.',
     failed: 'Could not check for updates: {error}', lastCheck: 'Last checked {when}.',
     howItWorks: '{app} checks GitHub when it opens and every 6 hours, downloads new versions in the background and verifies their signature. Your Data folder is kept.',
@@ -22,6 +23,7 @@ const UPDATE_TEXT = {
   pt: {
     updates: 'Atualizações', close: 'Fechar', checkNow: 'Procurar agora', restartNow: 'Reiniciar agora', restartAnyway: 'Reiniciar mesmo assim',
     idle: 'Ainda não procurou.', checking: 'Procurando atualizações…', upToDate: 'Você está na versão mais recente.',
+    source: 'Fonte de atualizações', updateFeedMissing: 'Nenhum pacote de atualização foi publicado no endereço configurado.', invalidUpdateFeed: 'O manifesto de atualização é inválido.', invalidUpdateSource: 'A fonte de atualização precisa ser um endereço HTTPS válido.', unsignedUpdate: 'A versão nova não tem um pacote de atualização assinado.', updateTooLarge: 'A atualização excede o tamanho permitido.', unavailable: 'Não foi possível consultar atualizações. Abra Atualizações para ver os detalhes.',
     downloading: 'Baixando o {app} {v}…', ready: 'O {app} {v} está pronto. Ele é instalado quando você fecha o app.',
     failed: 'Não foi possível procurar atualizações: {error}', lastCheck: 'Última verificação: {when}.',
     howItWorks: 'O {app} procura no GitHub ao abrir e a cada 6 horas, baixa as versões novas em segundo plano e confere a assinatura delas. Sua pasta Data é mantida.',
@@ -30,6 +32,7 @@ const UPDATE_TEXT = {
   es: {
     updates: 'Actualizaciones', close: 'Cerrar', checkNow: 'Buscar ahora', restartNow: 'Reiniciar ahora', restartAnyway: 'Reiniciar de todos modos',
     idle: 'Aún no se ha buscado.', checking: 'Buscando actualizaciones…', upToDate: 'Tienes la versión más reciente.',
+    source: 'Fuente de actualizaciones', updateFeedMissing: 'No se ha publicado un paquete en la dirección configurada.', invalidUpdateFeed: 'El manifiesto de actualización no es válido.', invalidUpdateSource: 'La fuente debe ser una dirección HTTPS válida.', unsignedUpdate: 'La versión nueva no tiene un paquete firmado.', updateTooLarge: 'La actualización supera el tamaño permitido.', unavailable: 'No se pudieron consultar actualizaciones. Abre Actualizaciones para ver los detalles.',
     downloading: 'Descargando {app} {v}…', ready: '{app} {v} está listo. Se instala cuando cierras la app.',
     failed: 'No se pudo buscar actualizaciones: {error}', lastCheck: 'Última comprobación: {when}.',
     howItWorks: '{app} busca en GitHub al abrirse y cada 6 horas, descarga las versiones nuevas en segundo plano y comprueba su firma. Tu carpeta Data se conserva.',
@@ -63,7 +66,7 @@ const updates = (() => {
       case 'upToDate': return ut('upToDate');
       case 'downloading': return ut('downloading', { v });
       case 'ready': return ut('ready', { v });
-      case 'failed': return ut('failed', { error: status.error });
+      case 'failed': return ut('failed', { error: UPDATE_TEXT.en[status.error] ? ut(status.error) : status.error });
       default: return ut('idle');
     }
   }
@@ -76,6 +79,7 @@ const updates = (() => {
       el.addEventListener('click', show);
     }
     el.classList.toggle('ready', status.state === 'ready');
+    el.classList.toggle('failed', status.state === 'failed');
     el.title = `${ut('updates')} · ${line()}`;
     el.innerHTML = `<svg class="i" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/></svg>v${esc(status.current)}${status.state === 'ready' ? '<i class="dot"></i>' : ''}`;
   }
@@ -83,8 +87,12 @@ const updates = (() => {
   function renderBar() {
     const bar = document.getElementById('update-bar');
     if (!bar) return;
-    bar.hidden = status?.state !== 'ready';
+    bar.hidden = !['ready', 'failed'].includes(status?.state);
     if (bar.hidden) return;
+    if (status.state === 'failed') {
+      bar.innerHTML = `<span>${esc(ut('unavailable'))}</span><button class="btn small" data-update="panel">${esc(ut('updates'))}</button>`;
+      return;
+    }
     bar.innerHTML = `<span>${esc(ut('bar', { v: status.version }))}</span>` +
       `<button class="btn small" data-update="panel">${esc(ut('updates'))}</button>` +
       `<button class="btn primary small" data-update="restart">${esc(ut('restartNow'))}</button>`;
@@ -114,6 +122,7 @@ const updates = (() => {
         ${status.state === 'downloading' || status.state === 'checking' ? '<div class="pbar busy"><i></i></div>' : ''}
       </div>
       ${when ? `<p class="note">${esc(ut('lastCheck', { when }))}</p>` : ''}
+      ${status.source ? `<p class="note updates-source">${esc(ut('source'))}: <span>${esc(status.source)}</span></p>` : ''}
       ${notes ? `<h3 class="updates-notes-title">${esc(ut('whatsNew', { v: status.version }))}</h3><div class="updates-notes">${esc(notes)}</div>` : ''}
       <p class="note">${esc(ut('howItWorks'))}</p>
       ${warning ? `<p class="updates-warning">${esc(warning)}</p>` : ''}
