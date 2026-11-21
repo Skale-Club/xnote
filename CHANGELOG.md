@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-11-20
 
 - Move to the Skale Club family design (skale.css v2) with Xnote's voice-violet signal: the selected
   meeting, the meeting header, the welcome screen, your own transcript lines and the recording
