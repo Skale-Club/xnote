@@ -187,19 +187,21 @@ svg.i {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: calc(100% - 24px);
-  margin: 0 12px 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--signal) 12%, transparent), color-mix(in srgb, var(--signal) 2%, transparent));
+  width: 100%;
+  margin: 0;
+  padding: 14px 20px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
   color: var(--fg);
   cursor: pointer;
   text-align: left;
-  transition: border-color 0.15s, background 0.15s;
+  opacity: 0.8;
+  transition: opacity 0.15s;
 }
-.skale:hover { border-color: var(--line-strong); background: linear-gradient(135deg, color-mix(in srgb, var(--signal) 20%, transparent), color-mix(in srgb, var(--signal) 4%, transparent)); }
-.skale img { width: 30px; height: 30px; flex: none; }
+.skale:hover { opacity: 1; }
+.skale img { width: 26px; height: 26px; flex: none; }
 .skale span { display: flex; flex-direction: column; line-height: 1.2; font-weight: 600; font-size: 13px; }
 .skale small { color: var(--muted); font-weight: 400; font-size: 11px; }
 
@@ -208,7 +210,7 @@ svg.i {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 12px 16px 16px 20px;
+  padding: 10px 14px 12px 20px;
   border-top: 1px solid var(--line);
 }
 .ver { color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -409,7 +411,10 @@ select {
   cursor: pointer;
 }
 select option { background: var(--card-solid); color: var(--fg); }
-.side-foot select { padding: 6px 10px; border-radius: 9px; font-size: 13px; }
+/* Footer controls are plain text with a chevron: no box, just the hover color. */
+.side-foot select { padding: 6px 0; border-color: transparent; border-radius: 6px; background-color: transparent; background-position: right 4px center; color: var(--muted); font-size: 13px; }
+.side-foot select:hover { border-color: transparent; color: var(--fg); }
+.side-foot select:focus { border-color: transparent; box-shadow: none; }
 
 .search {
   padding-left: 34px;
@@ -577,19 +582,19 @@ table.kv td:first-child { color: var(--muted); width: 42%; padding-right: 16px; 
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 9px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 6px;
   background: transparent;
   color: var(--faint);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
+  transition: color 0.15s;
 }
-.ver-btn:hover { border-color: var(--line-strong); color: var(--fg); }
+.ver-btn:hover { color: var(--fg); }
 .ver-btn svg.i { width: 13px; height: 13px; }
-.ver-btn.ready { border-color: color-mix(in srgb, var(--brand-soft) 45%, transparent); color: var(--brand-soft); }
+.ver-btn.ready { color: var(--brand-soft); }
 .ver-btn .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--brand-soft); box-shadow: 0 0 8px var(--brand-soft); }
 .updates-dialog { width: min(520px, 90vw); }
 .updates-dialog .note { margin: 0 0 14px; }
