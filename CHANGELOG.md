@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.1 — 2026-11-20
 
 - Simplify the sidebar footer: the Made by Skale Club link, the language picker and the version
   button lose their boxes and tinted background; one hairline separates each group.
