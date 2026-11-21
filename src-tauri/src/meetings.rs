@@ -134,7 +134,7 @@ impl Store {
                 })
             })
             .collect();
-        list.sort_by(|a, b| b.created.cmp(&a.created));
+        list.sort_by_key(|m| std::cmp::Reverse(m.created));
         list
     }
 

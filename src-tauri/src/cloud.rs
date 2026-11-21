@@ -64,11 +64,7 @@ pub fn set_key(provider: &Provider, key: &str) -> Result<(), String> {
     if key.is_empty() {
         return Err("empty key".into());
     }
-    agent()
-        .get(&format!("{}/models", provider.base))
-        .set("Authorization", &format!("Bearer {key}"))
-        .call()
-        .map_err(api_error)?;
+    agent().get(&format!("{}/models", provider.base)).set("Authorization", &format!("Bearer {key}")).call().map_err(api_error)?;
     credential(provider)?.set_password(key).map_err(|e| e.to_string())
 }
 

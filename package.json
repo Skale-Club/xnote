@@ -8,7 +8,7 @@
     "tauri": "tauri",
     "verify:icon": "node scripts/verify-windows-icon.cjs",
     "postbuild": "npm run verify:icon",
-    "test:ui": "node --test scripts/preparation.test.cjs"
+    "test:ui": "node --test \"scripts/*.test.cjs\""
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"

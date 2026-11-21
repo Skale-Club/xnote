@@ -1,0 +1,28 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Remove personal information, API keys and private transcripts before posting."
+  - type: input
+    id: version
+    attributes: { label: Xnote version, description: "Bottom of the sidebar, e.g. 1.0.0" }
+    validations: { required: true }
+  - type: input
+    id: windows
+    attributes: { label: Windows version, placeholder: "Windows 11 24H2" }
+    validations: { required: true }
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Setup
+      options: [On this computer (local), Cloud provider, Not set up yet]
+    validations: { required: true }
+  - type: textarea
+    id: what
+    attributes: { label: What happened, description: "Steps, what you expected and what you saw" }
+    validations: { required: true }
+  - type: textarea
+    id: diagnostics
+    attributes: { label: Diagnostics, description: "Settings → Copy diagnostics (contains no keys)", render: text }

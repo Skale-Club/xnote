@@ -51,10 +51,7 @@ pub fn clear_key() -> Result<(), String> {
 }
 
 fn agent() -> ureq::Agent {
-    ureq::AgentBuilder::new()
-        .timeout_connect(Duration::from_secs(20))
-        .timeout_read(Duration::from_secs(300))
-        .build()
+    ureq::AgentBuilder::new().timeout_connect(Duration::from_secs(20)).timeout_read(Duration::from_secs(300)).build()
 }
 
 /// The API's own error message, when it sent one.
@@ -167,11 +164,7 @@ fn read_stream(reader: impl BufRead, on_text: &mut dyn FnMut(&str)) -> Result<St
 
 /// The "# Title" line of the enhanced notes, if any.
 pub fn title_of(markdown: &str) -> Option<String> {
-    markdown
-        .lines()
-        .find_map(|l| l.strip_prefix("# "))
-        .map(|t| t.trim().to_string())
-        .filter(|t| !t.is_empty())
+    markdown.lines().find_map(|l| l.strip_prefix("# ")).map(|t| t.trim().to_string()).filter(|t| !t.is_empty())
 }
 
 #[cfg(test)]

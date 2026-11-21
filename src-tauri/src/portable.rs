@@ -6,10 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 
 pub fn exe_dir() -> PathBuf {
-    std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(PathBuf::from))
-        .unwrap_or_else(|| PathBuf::from("."))
+    std::env::current_exe().ok().and_then(|exe| exe.parent().map(PathBuf::from)).unwrap_or_else(|| PathBuf::from("."))
 }
 
 /// `Data\` next to the exe, created on first use.
