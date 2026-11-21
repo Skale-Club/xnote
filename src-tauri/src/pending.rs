@@ -66,7 +66,7 @@ pub fn count() -> usize {
 
 pub fn samples(item: &Item) -> Result<Vec<f32>, String> {
     let bytes = fs::read(&item.path).map_err(|e| e.to_string())?;
-    Ok(bytes.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect())
+    Ok(bytes.as_chunks::<4>().0.iter().map(|c| f32::from_le_bytes(*c)).collect())
 }
 
 /// Transcribed (or nothing was said): the audio is deleted.
