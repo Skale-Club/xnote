@@ -1,7 +1,10 @@
-/* Skale Club shared style: the window frame, controls and surfaces common to
-   Xnote, Xvert and Xpace. Keep this file identical in every app (Xink's
-   toolbar uses the same values in toolbar.css); app-specific rules belong in
-   style.css. Palette: navy surfaces, CTA blue #5173D6, soft blue #8FA9EE. */
+/* Skale Club shared style v2: the window frame, controls and surfaces common to
+   the Skale Club Windows apps (Xdeck, Xtudio, Xvert, Xnote, Xink, Xpace).
+   Source of truth: skaleclub-apps/design/skale-css/skale.css. Do not edit the copy
+   inside an app; change it here and run sync.ps1. App-specific rules belong in
+   style.css. Palette: navy surfaces; each app sets one signal color with
+   <html data-app="…">, and every brand color below is derived from it. Without
+   data-app the signal is Skale blue #5173D6, so v1 apps look nearly as before. */
 
 :root {
   color-scheme: dark;
@@ -23,14 +26,16 @@
   --muted: #8b97b1;
   --faint: #5b6782;
 
-  /* brand */
-  --brand: #5173d6;
-  --brand-hover: #6182e3;
-  --brand-deep: #3d5cc2;
-  --brand-soft: #8fa9ee;
-  --brand-tint: rgba(81, 115, 214, 0.16);
-  --brand-glow: rgba(81, 115, 214, 0.45);
-  --grad: linear-gradient(135deg, #6a8bf0 0%, #5173d6 48%, #4361c8 100%);
+  /* brand: everything derives from --signal (set per app below) */
+  --signal: #5173d6;
+  --on-brand: #fff;
+  --brand: var(--signal);
+  --brand-hover: color-mix(in srgb, var(--signal) 88%, white);
+  --brand-deep: color-mix(in srgb, var(--signal) 82%, black);
+  --brand-soft: color-mix(in srgb, var(--signal) 60%, white);
+  --brand-tint: color-mix(in srgb, var(--signal) 16%, transparent);
+  --brand-glow: color-mix(in srgb, var(--signal) 45%, transparent);
+  --grad: linear-gradient(135deg, color-mix(in srgb, var(--signal) 80%, white) 0%, var(--signal) 48%, color-mix(in srgb, var(--signal) 85%, black) 100%);
 
   /* status */
   --good: #3dd68c;
@@ -46,7 +51,20 @@
   --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --font-display: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+  --font-brand: "Unbounded", var(--font-display);
 }
+
+/* ---------- APP SIGNALS: the only per-app lines ----------
+   Signals sit at matching lightness around the hue wheel. The green band is
+   reserved for "healthy" (--good), so no app uses it. Text on a signal is dark
+   ink, never white, so every signal keeps its contrast. */
+:root[data-app] { --on-brand: #04070d; }
+:root[data-app="xdeck"]  { --signal: #3cc6f2; }  /* signal cyan */
+:root[data-app="xtudio"] { --signal: #ff5fb4; }  /* club pink */
+:root[data-app="xvert"]  { --signal: #ff8f45; }  /* render orange */
+:root[data-app="xnote"]  { --signal: #a77bff; }  /* voice violet */
+:root[data-app="xink"]   { --signal: #f2e35b; }  /* highlighter */
+:root[data-app="xpace"]  { --signal: #6f8cff; }  /* system blue */
 
 * { box-sizing: border-box; }
 
@@ -63,7 +81,7 @@ html, body {
 body {
   display: flex;
   background:
-    radial-gradient(900px 520px at 100% -8%, rgba(81, 115, 214, 0.17), transparent 62%),
+    radial-gradient(900px 520px at 100% -8%, color-mix(in srgb, var(--signal) 17%, transparent), transparent 62%),
     radial-gradient(700px 480px at 18% 112%, rgba(143, 169, 238, 0.07), transparent 60%),
     var(--bg);
 }
@@ -78,7 +96,7 @@ body::before {
 }
 
 button, select, input, textarea { font: inherit; color: inherit; }
-::selection { background: rgba(81, 115, 214, 0.45); color: #fff; }
+::selection { background: color-mix(in srgb, var(--signal) 45%, transparent); color: #fff; }
 :focus-visible { outline: 2px solid var(--brand-soft); outline-offset: 2px; }
 
 ::-webkit-scrollbar { width: 12px; height: 12px; }
@@ -145,9 +163,9 @@ svg.i {
 }
 .nav-item:hover { background: var(--hover); color: var(--fg); }
 .nav-item.on {
-  background: linear-gradient(90deg, rgba(81, 115, 214, 0.3), rgba(81, 115, 214, 0.08));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--signal) 30%, transparent), color-mix(in srgb, var(--signal) 8%, transparent));
   color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(143, 169, 238, 0.14);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-soft) 14%, transparent);
 }
 .nav-item.on::before {
   content: "";
@@ -174,13 +192,13 @@ svg.i {
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: linear-gradient(135deg, rgba(81, 115, 214, 0.12), rgba(81, 115, 214, 0.02));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--signal) 12%, transparent), color-mix(in srgb, var(--signal) 2%, transparent));
   color: var(--fg);
   cursor: pointer;
   text-align: left;
   transition: border-color 0.15s, background 0.15s;
 }
-.skale:hover { border-color: var(--line-strong); background: linear-gradient(135deg, rgba(81, 115, 214, 0.2), rgba(81, 115, 214, 0.04)); }
+.skale:hover { border-color: var(--line-strong); background: linear-gradient(135deg, color-mix(in srgb, var(--signal) 20%, transparent), color-mix(in srgb, var(--signal) 4%, transparent)); }
 .skale img { width: 30px; height: 30px; flex: none; }
 .skale span { display: flex; flex-direction: column; line-height: 1.2; font-weight: 600; font-size: 13px; }
 .skale small { color: var(--muted); font-weight: 400; font-size: 11px; }
@@ -249,12 +267,12 @@ header h1, .page-title {
 
 .btn.primary {
   background: var(--grad);
-  border-color: rgba(143, 169, 238, 0.45);
-  color: #fff;
+  border-color: color-mix(in srgb, var(--brand-soft) 45%, transparent);
+  color: var(--on-brand);
   font-weight: 600;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.22) inset, 0 8px 20px -8px var(--brand-glow);
 }
-.btn.primary:hover:not(:disabled) { background: var(--grad); filter: brightness(1.1); border-color: rgba(143, 169, 238, 0.7); }
+.btn.primary:hover:not(:disabled) { background: var(--grad); filter: brightness(1.1); border-color: color-mix(in srgb, var(--brand-soft) 70%, transparent); }
 .btn.danger {
   background: linear-gradient(135deg, #ff6b7d, #e8435a);
   border-color: rgba(255, 140, 155, 0.5);
@@ -306,7 +324,7 @@ header h1, .page-title {
 .tile, .stat {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(160deg, rgba(81, 115, 214, 0.1), rgba(81, 115, 214, 0) 55%), var(--card);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--signal) 10%, transparent), color-mix(in srgb, var(--signal) 0%, transparent) 55%), var(--card);
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 13px 15px 11px;
@@ -322,8 +340,8 @@ header h1, .page-title {
   border-radius: 12px;
   display: grid;
   place-items: center;
-  background: linear-gradient(145deg, rgba(81, 115, 214, 0.3), rgba(81, 115, 214, 0.08));
-  box-shadow: inset 0 0 0 1px rgba(143, 169, 238, 0.18);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--signal) 30%, transparent), color-mix(in srgb, var(--signal) 8%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-soft) 18%, transparent);
   color: var(--brand-soft);
 }
 
@@ -333,9 +351,9 @@ header h1, .page-title {
   justify-content: space-between;
   gap: 14px;
   padding: 11px 16px;
-  border: 1px solid rgba(143, 169, 238, 0.3);
+  border: 1px solid color-mix(in srgb, var(--brand-soft) 30%, transparent);
   border-radius: 14px;
-  background: linear-gradient(90deg, rgba(81, 115, 214, 0.24), rgba(81, 115, 214, 0.07));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--signal) 24%, transparent), color-mix(in srgb, var(--signal) 7%, transparent));
   box-shadow: 0 10px 30px -18px var(--brand-glow);
   font-size: 13px;
 }
@@ -349,7 +367,7 @@ header h1, .page-title {
   margin-left: 6px;
   border-radius: 999px;
   background: var(--brand-tint);
-  box-shadow: inset 0 0 0 1px rgba(143, 169, 238, 0.2);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-soft) 20%, transparent);
   color: var(--brand-soft);
   font-size: 11px;
   font-weight: 600;
@@ -378,7 +396,7 @@ header h1, .page-title {
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .search:hover, .field:hover, select.sel:hover, .side-foot select:hover { border-color: rgba(143, 169, 238, 0.36); }
-.search:focus, .field:focus, select.sel:focus, .side-foot select:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(81, 115, 214, 0.25); }
+.search:focus, .field:focus, select.sel:focus, .side-foot select:focus { border-color: var(--brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 25%, transparent); }
 .search::placeholder, .field::placeholder { color: var(--faint); }
 
 select {
@@ -421,19 +439,19 @@ input[type="checkbox"]:hover:not(:disabled), input[type="radio"]:hover:not(:disa
 input[type="checkbox"]:checked, input[type="radio"]:checked {
   background: var(--grad);
   border-color: transparent;
-  box-shadow: 0 0 0 1px rgba(143, 169, 238, 0.5), 0 4px 12px -4px var(--brand-glow);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand-soft) 50%, transparent), 0 4px 12px -4px var(--brand-glow);
 }
 input[type="checkbox"]::after {
   content: "";
   width: 10px;
   height: 10px;
-  background: #fff;
+  background: var(--on-brand);
   clip-path: polygon(14% 52%, 0 66%, 38% 100%, 100% 22%, 86% 8%, 38% 72%);
   transform: scale(0);
   transition: transform 0.12s var(--ease);
 }
 input[type="checkbox"]:checked::after { transform: scale(1); }
-input[type="radio"]::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #fff; transform: scale(0); transition: transform 0.12s var(--ease); }
+input[type="radio"]::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--on-brand); transform: scale(0); transition: transform 0.12s var(--ease); }
 input[type="radio"]:checked::after { transform: scale(1); }
 input[type="checkbox"]:disabled, input[type="radio"]:disabled { opacity: 0.45; cursor: default; }
 
@@ -462,7 +480,7 @@ input[type="checkbox"]:disabled, input[type="radio"]:disabled { opacity: 0.45; c
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
   transition: transform 0.2s var(--ease);
 }
-.switch.on { background: var(--grad); box-shadow: inset 0 0 0 1px rgba(143, 169, 238, 0.4), 0 4px 14px -4px var(--brand-glow); }
+.switch.on { background: var(--grad); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-soft) 40%, transparent), 0 4px 14px -4px var(--brand-glow); }
 .switch.on::after { transform: translateX(18px); }
 .switch:disabled { opacity: 0.4; cursor: default; }
 
@@ -494,7 +512,7 @@ table.kv td:first-child { color: var(--muted); width: 42%; padding-right: 16px; 
   padding: 24px 26px 20px;
   border: 1px solid var(--line-strong);
   border-radius: 20px;
-  background: linear-gradient(180deg, rgba(81, 115, 214, 0.1), transparent 40%), var(--card-solid);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--signal) 10%, transparent), transparent 40%), var(--card-solid);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 30px 80px -20px rgba(0, 0, 0, 0.8);
   animation: pop 0.22s var(--ease);
 }
@@ -571,7 +589,7 @@ table.kv td:first-child { color: var(--muted); width: 42%; padding-right: 16px; 
 }
 .ver-btn:hover { border-color: var(--line-strong); color: var(--fg); }
 .ver-btn svg.i { width: 13px; height: 13px; }
-.ver-btn.ready { border-color: rgba(143, 169, 238, 0.45); color: var(--brand-soft); }
+.ver-btn.ready { border-color: color-mix(in srgb, var(--brand-soft) 45%, transparent); color: var(--brand-soft); }
 .ver-btn .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--brand-soft); box-shadow: 0 0 8px var(--brand-soft); }
 .updates-dialog { width: min(520px, 90vw); }
 .updates-dialog .note { margin: 0 0 14px; }
@@ -587,7 +605,7 @@ table.kv td:first-child { color: var(--muted); width: 42%; padding-right: 16px; 
 }
 .updates-state span { color: var(--muted); font-size: 13px; }
 .updates-state.upToDate span { color: var(--good); }
-.updates-state.ready { border-color: rgba(143, 169, 238, 0.4); background: linear-gradient(90deg, rgba(81, 115, 214, 0.2), rgba(81, 115, 214, 0.05)); }
+.updates-state.ready { border-color: color-mix(in srgb, var(--brand-soft) 40%, transparent); background: linear-gradient(90deg, color-mix(in srgb, var(--signal) 20%, transparent), color-mix(in srgb, var(--signal) 5%, transparent)); }
 .updates-state.ready span { color: var(--fg); }
 .updates-state.failed span { color: var(--warn); }
 .updates-state .pbar { height: 5px; margin: 8px 0 0; }
@@ -606,3 +624,21 @@ table.kv td:first-child { color: var(--muted); width: 42%; padding-right: 16px; 
 }
 .updates-warning { margin: 0 0 14px !important; color: var(--warn) !important; font-size: 13px; }
 @keyframes updates-slide { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+
+/* ---------- v2 additions ---------- */
+
+/* Silkscreen label: section titles in mono caps, like the printing on hardware. */
+.silk {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font: 700 10px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.silk em { font-style: normal; color: var(--muted); letter-spacing: 0.06em; }
+
+/* Readout: every number that changes (volume, battery, sizes, codes, versions). */
+.readout { font-family: var(--font-mono); font-weight: 700; font-variant-numeric: tabular-nums; }

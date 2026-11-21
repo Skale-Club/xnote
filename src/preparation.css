@@ -1,5 +1,5 @@
 /* Stage-based recording preparation, using the established Skale Club palette. */
-.preparation { flex: none; margin: 16px 28px 0; padding: 16px 18px 13px; background: var(--card); border: 1px solid rgba(81,115,214,.45); border-radius: 12px; }
+.preparation { flex: none; margin: 16px 28px 0; padding: 16px 18px 13px; background: var(--card); border: 1px solid color-mix(in srgb, var(--brand) 45%, transparent); border-radius: 12px; }
 .preparation[hidden] { display: none; }
 .prep-head { display: flex; align-items: center; gap: 12px; }
 .prep-head > img { width: 34px; height: 34px; object-fit: contain; flex: none; }
@@ -20,7 +20,7 @@
 .prep-error p { margin: 10px 0 6px; }
 .prep-error { color: #ff9aa6; font-size: 13px; }
 .prep-error details { color: var(--muted); font-size: 12px; }
-.prep-error pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 140px; overflow-y: auto; font: 12px/1.5 Consolas, monospace; }
+.prep-error pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 140px; overflow-y: auto; font: 12px/1.5 var(--font-mono); }
 .preparation.has-error { border-color: rgba(255,84,104,.45); }
 .preparation.has-error .prep-track > i { background: var(--rec); }
 .preparation.complete .prep-track > i { background: var(--good); }
