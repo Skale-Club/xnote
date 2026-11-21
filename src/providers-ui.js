@@ -386,7 +386,8 @@ function providersCard() {
   return `<div class="card">${rows}${custom}</div><p class="note">${esc(t('providersNote'))}</p>`;
 }
 
-const SETTINGS_SECTIONS = ['general', 'transcription', 'summary', 'providers', 'assistants', 'privacy'];
+const SETTINGS_SECTIONS = ['general', 'transcription', 'summary', 'providers', 'assistants', 'privacy', 'help'];
+let help = null; // { version, dataFolder, writable, pending }
 
 function settingsBody(section) {
   const opt = (value, label, current) => `<option value="${value}"${value === current ? ' selected' : ''}>${esc(label)}</option>`;
@@ -416,6 +417,7 @@ function settingsBody(section) {
   }
   if (section === 'providers') return providersCard();
   if (section === 'assistants') return assistantsCard();
+  if (section === 'help') return helpCard();
   const names = recipients();
   return `<div class="card"><p>${esc(cloud ? t('privacyCloud', { name: providerName(engine.provider) }) : t('privacy'))}</p>` +
     `<p class="note">${esc(names.length ? t('privacySent', { names: names.join(', ') }) : t('privacyAllLocal'))}</p>` +
@@ -442,10 +444,28 @@ function renderSettings() {
   });
 }
 
+function helpCard() {
+  if (!help) {
+    invoke('help_info').then((info) => { help = info; if (view === 'settings') renderSettings(); });
+    return '';
+  }
+  const row = (label, value, button = '') => `<div class="row"><span class="row-label">${esc(label)}</span><span class="grow">${value}</span>${button}</div>`;
+  return `<div class="card">` +
+    row(t('version'), `<span class="readout">${esc(help.version)}</span>`) +
+    row(t('dataFolder'), `<span class="path">${esc(help.dataFolder)}</span>`, `<button class="btn small" data-act="open-data">${esc(t('openFolder'))}</button>`) +
+    (help.writable ? '' : `<p class="note warn">${esc(t('notWritable'))}</p>`) +
+    row(t('waitingAudio'), esc(help.pending ? t('pendingCount', { n: help.pending }) : t('nothingWaiting')),
+      help.pending ? `<button class="btn small" data-act="retry-pending">${esc(t('sendNow'))}</button>` : '') +
+    `</div><div class="card"><h3>${esc(t('problemCard'))}</h3><p class="note">${esc(t('problemText'))}</p>` +
+    `<div class="row"><button class="btn" data-act="copy-diagnostics">${svg(ICONS.copy)}${esc(t('copyDiagnostics'))}</button>` +
+    `<button class="btn" data-act="open-issues">${esc(t('reportProblem'))}</button></div></div>`;
+}
+
 /** Opens Settings at a section. */
 function openSettings(section = 'general') {
   settingsSection = section;
   sumChoice = null;
+  help = null;
   view = 'settings';
   render();
 }
@@ -519,6 +539,14 @@ function handleProviderAct(act, el) {
   } else if (act === 'remove-custom') {
     invoke('remove_custom_provider', { id }).then((info) => { engine = info; sumChoice = null; renderSettings(); }, (e) => toast(explain(e)));
   } else if (act === 'add-custom') addCustom(el);
+  else if (act === 'open-data') invoke('open_data_folder');
+  else if (act === 'open-issues') invoke('open_issues');
+  else if (act === 'copy-diagnostics') {
+    invoke('diagnostics').then((text) => navigator.clipboard.writeText(text)).then(() => toast(t('diagnosticsCopied')));
+  } else if (act === 'retry-pending') {
+    el.disabled = true;
+    invoke('retry_pending_now').then((n) => { help = null; showPending(n); renderSettings(); });
+  }
   else if (act === 'setup') openSetup('change');
   else if (act === 'setup-back') { setupStep = 1; renderSetup(); }
   else if (act === 'summary-next') saveSummary().then((ok) => { if (ok) { setupStep = 3; renderSetup(); } });

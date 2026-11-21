@@ -26,6 +26,8 @@ async function harness(engineOverrides = {}) {
     list_meetings: [],
     update_status: { current: '1.0.0', state: 'idle', version: null, notes: '', error: null, checkedAt: null },
     list_models: ['llama3.2', 'qwen3'],
+    help_info: { version: '1.0.0', dataFolder: 'C:\\Apps\\Xnote\\Data', writable: true, pending: 2 },
+    diagnostics: 'Xnote 1.0.0',
     assistant_info: { exe: 'C:\\Apps\\Xnote\\Xnote.exe', canWrite: true },
   };
   const invoke = async (command, args) => {
@@ -139,4 +141,20 @@ test('Settings show how to connect AI assistants, with this exe in each snippet'
   assert.match(h.html(), /claude mcp add --scope user xnote -- &quot;C:\\Apps\\Xnote\\Xnote\.exe&quot; --mcp/);
   h.change({ id: 'assistants-write', checked: false });
   assert.deepEqual({ ...h.calls.find((c) => c.command === 'set_assistants_can_write').args }, { allowed: false });
+});
+
+test('Help shows the version, the Data folder and audio waiting for the connection', async () => {
+  const h = await harness({ status: { gpu: true, packs: ['cuda'], models: ['best'] }, mode: 'local', pack: 'cuda', model: 'best' });
+  await flush();
+  // At start the waiting audio shows in the notice bar.
+  assert.equal(h.node('notice-bar').hidden, false);
+  assert.match(h.node('notice-bar').textContent, /2 part\(s\) of the audio/);
+  h.run("openSettings('help')");
+  await flush(); await flush();
+  assert.match(h.html(), /1\.0\.0/);
+  assert.match(h.html(), /data-act="open-data"/);
+  assert.match(h.html(), /data-act="retry-pending"/);
+  assert.match(h.html(), /data-act="copy-diagnostics"/);
+  h.run('showPending(0)');
+  assert.equal(h.node('notice-bar').hidden, true);
 });

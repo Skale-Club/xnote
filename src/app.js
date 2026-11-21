@@ -427,6 +427,13 @@ listen('engine-loading', ({ payload }) => { engineLoading = payload; renderHead(
 listen('gpu-fallback', () => toast(t('gpuFallback')));
 
 listen('levels', ({ payload }) => {
+  // No sound from either side for a minute usually means a device problem.
+  if (recording?.phase === 'recording') {
+    const quiet = payload.me < 0.0005 && payload.them < 0.0005;
+    if (!quiet) silentSince = 0;
+    else if (!silentSince) silentSince = Date.now();
+    else if (!silenceWarned && Date.now() - silentSince > 60000) { silenceWarned = true; toast(t('silenceWarning')); }
+  } else { silentSince = 0; silenceWarned = false; }
   const width = (rms) => `${Math.min(100, Math.sqrt(rms) * 220)}%`;
   const me = $('lv-me'), them = $('lv-them');
   if (me) me.style.width = width(payload.me);
@@ -458,6 +465,30 @@ listen('enhance-delta', ({ payload }) => {
   const el = $('enhanced');
   if (el) el.innerHTML = enhancedHtml();
 });
+
+// ---------- notices: audio waiting for the cloud, Data folder, silence ----------
+
+let pendingCount = 0;
+let notWritable = false;
+let silentSince = 0;
+let silenceWarned = false;
+
+function renderNotice() {
+  const bar = $('notice-bar');
+  const text = notWritable ? t('notWritable') : pendingCount ? t('pendingBar', { n: pendingCount }) : '';
+  bar.hidden = !text;
+  bar.className = `notice-bar${notWritable ? ' warn' : ''}`;
+  bar.textContent = text;
+}
+
+function showPending(n) {
+  const before = pendingCount;
+  pendingCount = n;
+  renderNotice();
+  if (before && !n) toast(t('pendingSent'));
+}
+
+listen('pending', ({ payload }) => showPending(payload));
 
 let lastErrorToast = 0;
 listen('transcribe-error', ({ payload }) => {
@@ -495,5 +526,6 @@ window.addEventListener?.('focus', async () => {
   } catch (_) { /* defaults */ }
   setLanguage(settings.language);
   [engine, meetings] = await Promise.all([invoke('engine_status'), invoke('list_meetings')]);
+  invoke('help_info').then((info) => { notWritable = !!info && !info.writable; showPending(info?.pending || 0); }).catch(() => {});
   if (engineReady()) { view = 'welcome'; render(); } else openSetup(engine.mode ? 'change' : 'first');
 })();

@@ -7,6 +7,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod ai;
+mod applog;
 mod audio;
 mod cloud;
 mod commands;
@@ -14,6 +15,7 @@ mod engine;
 mod mcp;
 mod mcp_tools;
 mod meetings;
+mod pending;
 mod portable;
 mod providers;
 mod settings;
@@ -46,7 +48,7 @@ pub(crate) struct AppState {
     store: meetings::Store,
     startup: startup::Coordinator,
     pub(crate) server: Mutex<Option<engine::Server>>,
-    session: Mutex<Option<Session>>,
+    pub(crate) session: Mutex<Option<Session>>,
     levels: Arc<audio::Levels>,
 }
 
@@ -193,6 +195,10 @@ enum Transcriber {
 }
 
 impl Transcriber {
+    fn is_cloud(&self) -> bool {
+        matches!(self, Transcriber::Cloud(..))
+    }
+
     fn transcribe(&self, samples: &[f32], language: &str) -> Result<Option<String>, String> {
         match self {
             Transcriber::Local(port) => engine::transcribe(*port, samples, language),
@@ -213,6 +219,53 @@ fn transcriber(app: &AppHandle, attempt: &startup::Guard<'_>, progress: &mut dyn
         }
         _ => Err("engine".into()),
     }
+}
+
+static RETRYING: AtomicBool = AtomicBool::new(false);
+
+/// Sends the segments that waited for the cloud, in order; stops at the
+/// first failure (still offline) and tries again later.
+pub(crate) fn retry_pending(app: &AppHandle) {
+    if RETRYING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let s = settings(app);
+    if let Some((provider, model)) = s.cloud_transcriber() {
+        let items = pending::list();
+        let mut sent = 0;
+        for item in &items {
+            let Ok(samples) = pending::samples(item) else {
+                pending::done(item);
+                continue;
+            };
+            match cloud::transcribe(&provider, &model, &samples, &s.transcription_language) {
+                Ok(text) => {
+                    if let Some(text) = text {
+                        let line = meetings::Line { ms: item.ms, who: item.who.clone(), text };
+                        let state = app.state::<AppState>();
+                        let saved = state.store.update(&item.meeting, |m| {
+                            m.transcript.push(line.clone());
+                            m.transcript.sort_by_key(|l| l.ms);
+                        });
+                        if saved.is_ok() {
+                            let _ = app.emit("transcript", json!({ "id": item.meeting, "line": line }));
+                        }
+                    }
+                    pending::done(item);
+                    sent += 1;
+                }
+                Err(e) => {
+                    applog::error(&format!("pending audio still not sent: {e}"));
+                    break;
+                }
+            }
+        }
+        if sent > 0 {
+            applog::info(&format!("sent {sent} waiting segment(s)"));
+        }
+        let _ = app.emit("pending", pending::count());
+    }
+    RETRYING.store(false, Ordering::SeqCst);
 }
 
 /// Starts (or reuses) the whisper server for the current settings.
@@ -341,7 +394,16 @@ async fn start_recording(app: AppHandle, id: String, request_id: String) -> Resu
                             }
                             Ok(None) => {}
                             Err(e) => {
-                                let _ = app.emit("transcribe-error", e);
+                                applog::error(&format!("transcription failed: {e}"));
+                                // The cloud is unreachable: keep the audio and send it later.
+                                let who = if segment.who == audio::Who::Me { "me" } else { "them" };
+                                if transcriber.is_cloud()
+                                    && pending::save(&id, offset_ms + segment.start_ms, who, &segment.samples).is_ok()
+                                {
+                                    let _ = app.emit("pending", pending::count());
+                                } else {
+                                    let _ = app.emit("transcribe-error", e);
+                                }
                             }
                         }
                     }
@@ -369,6 +431,7 @@ async fn start_recording(app: AppHandle, id: String, request_id: String) -> Resu
                 levels_stop,
             });
             emit_state(&app, &id, "recording");
+            applog::info(&format!("recording started ({})", settings(&app).mode()));
         });
         if let Err(error) = committed {
             if let Some(recorder) = recorder {
@@ -403,6 +466,9 @@ async fn stop_recording(app: AppHandle) -> Result<meetings::Meeting, String> {
         state.levels.reset();
         let meeting = state.store.update(&session.id, |m| m.duration_ms = session.offset_ms + elapsed);
         emit_state(&app, &session.id, "idle");
+        applog::info(&format!("recording stopped after {} s", elapsed / 1000));
+        let retry_app = app.clone();
+        std::thread::spawn(move || retry_pending(&retry_app));
         meeting
     })
     .await
@@ -439,9 +505,11 @@ async fn enhance(app: AppHandle, id: String) -> Result<meetings::Meeting, String
         }
         let s = settings(&app);
         let (provider, model) = s.summarizer().ok_or("no API key")?;
+        applog::info(&format!("summary with {} ({model})", provider.id));
         let markdown = ai::enhance(&provider, &model, &meeting, &s.transcription_language, &mut |piece| {
             let _ = app.emit("enhance-delta", json!({ "id": id, "text": piece }));
-        })?;
+        })
+        .inspect_err(|e| applog::error(&format!("summary failed: {e}")))?;
         let title = ai::title_of(&markdown);
         state.store.update(&id, |m| {
             m.enhanced = markdown.clone();
@@ -532,6 +600,15 @@ fn main() {
             levels: Arc::new(audio::Levels::default()),
         })
         .setup(|app| {
+            applog::info(&format!("Xnote {} started", env!("CARGO_PKG_VERSION")));
+            // Audio that waited for the cloud is sent again every minute.
+            let retry = app.handle().clone();
+            std::thread::spawn(move || loop {
+                if pending::count() > 0 {
+                    retry_pending(&retry);
+                }
+                std::thread::sleep(Duration::from_secs(60));
+            });
             let handle = app.handle().clone();
             updater::start(move |status| {
                 let _ = handle.emit("update-status", status);
@@ -544,6 +621,11 @@ fn main() {
             set_transcription_language,
             engine_status,
             install_engine,
+            commands::help::diagnostics,
+            commands::help::help_info,
+            commands::help::open_data_folder,
+            commands::help::open_issues,
+            commands::help::retry_pending_now,
             commands::assistants::assistant_info,
             commands::assistants::set_assistants_can_write,
             commands::providers::set_cloud_key,

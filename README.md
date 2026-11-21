@@ -41,10 +41,12 @@ plans change; check the provider's site. API billing is separate from consumer c
 | Local engine and models | `Data/engine` |
 | Notes, transcript and enhanced notes | JSON files in `Data/meetings` |
 | Deleted meetings | Moved to `Data/meetings/.trash` |
+| Audio waiting for the cloud | `Data/pending`, only when a cloud transcription failed; deleted once sent |
+| Diagnostic log (no keys, no meeting text) | `Data/logs` |
 | Markdown exports | `Data/exports` |
 | API keys | Windows Credential Manager, outside the portable folder |
 
-Xnote does not save an audio recording for later playback. It processes audio segments in memory
+Xnote does not save an audio recording for later playback. If a cloud transcription fails (for example, no connection), only those speech segments wait in `Data/pending` and are sent again automatically. It processes audio segments in memory
 and, in cloud mode, sends them to the selected provider. When an AI summary is turned on, your written notes and the transcript are sent to
 the summary provider you chose (nothing leaves the PC with Ollama or LM Studio). With automatic
 summaries on, this happens when a recording stops.

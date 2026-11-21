@@ -14,6 +14,13 @@
   deleted), and the `summarize_meeting` prompt gives them Xnote's summary instructions. Settings →
   AI assistants shows the configuration for each client with the exe path. The window shows a
   summary saved by an assistant when it comes back to the front.
+- **Nothing lost when the connection drops.** Speech segments that could not reach the cloud wait
+  in `Data/pending` and are sent again automatically (every minute and after a recording); a bar
+  says how many are waiting.
+- Settings → Help: version, the Data folder, waiting audio with Send now, Copy diagnostics (no keys,
+  no meeting text) and Report a problem. A diagnostic log is kept in `Data/logs`.
+- Warnings when Xnote cannot save in its folder (for example under Program Files) and when neither
+  the microphone nor the computer audio has made a sound for a minute while recording.
 - **Guided first run** in three steps, with a short step-by-step guide for each provider.
 - Settings: AI summary card and a Providers and keys card (add, test and remove keys; add
   compatible providers). The privacy note lists who receives audio or text.
