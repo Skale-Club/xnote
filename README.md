@@ -10,6 +10,8 @@ Xnote is free and open source ([MIT](LICENSE)). It has no account and no subscri
 
 [Português](#português) · [Español](#español) · [Development and releases](docs/DEVELOPMENT.md)
 
+![A meeting in Xnote: AI notes with decisions and action items beside the live transcript](docs/images/meeting.png)
+
 ## Get started
 
 1. Download `Xnote.exe` from [Releases](https://github.com/Skale-Club/xnote/releases) and put it in a
@@ -20,6 +22,8 @@ Xnote is free and open source ([MIT](LICENSE)). It has no account and no subscri
    - **AI summary (optional):** none, AI on this computer (Ollama or LM Studio), or a provider with
      your own key.
 3. Click **New meeting → Start recording**, take notes, then **Stop**.
+
+![The guided setup, with step-by-step instructions for each provider](docs/images/setup.png)
 
 ## What does it cost?
 
@@ -33,62 +37,16 @@ You can also add any **OpenAI-compatible** address (a company gateway or a serve
 lists come from the provider, so new models work without an Xnote update. Provider prices and free
 plans change; check the provider's site. API billing is separate from consumer chat subscriptions.
 
-## Data and privacy
+## Privacy in short
 
-| Data | Storage or destination |
-|---|---|
-| Settings | `Data/xnote.json` beside the executable |
-| Local engine and models | `Data/engine` |
-| Notes, transcript and enhanced notes | JSON files in `Data/meetings` |
-| Deleted meetings | Moved to `Data/meetings/.trash` |
-| Audio waiting for the cloud | `Data/pending`, only when a cloud transcription failed; deleted once sent |
-| Diagnostic log (no keys, no meeting text) | `Data/logs` |
-| Markdown exports | `Data/exports` |
-| API keys | Windows Credential Manager, outside the portable folder |
+- **On this computer:** with local transcription and no summary (or Ollama / LM Studio), nothing
+  leaves the PC. Each meeting shows **Only on this PC** or the services that received it.
+- **With a provider:** audio goes to the transcription provider; notes and transcript go to the
+  summary provider, under that provider's data policy.
+- **Files:** meetings are JSON files in `Data` beside the exe; API keys are in the Windows
+  Credential Manager. Xnote keeps no recording.
 
-Xnote does not save an audio recording for later playback. If a cloud transcription fails (for example, no connection), only those speech segments wait in `Data/pending` and are sent again automatically. It processes audio segments in memory
-and, in cloud mode, sends them to the selected provider. When an AI summary is turned on, your written notes and the transcript are sent to
-the summary provider you chose (nothing leaves the PC with Ollama or LM Studio). With automatic
-summaries on, this happens when a recording stops.
-
-Each provider's own data policy applies to what it receives. Requests to OpenAI set `store: false`,
-which is not a promise of zero retention across all its systems. Local meeting files and exports are ordinary files, without
-app-level encryption.
-
-Close Xnote before copying its folder for backup. API keys do not move with the folder and must be
-configured on another PC. Deleted meetings remain in the trash directory; deletion in the UI is not
-secure erasure.
-
-## Limits and troubleshooting
-
-- **Missing audio:** check Windows' default input/output devices, microphone   access and the in-app
-  audio meters. Stop and restart recording after changing   devices. Xnote does not select
-  individual call-app audio streams.
-- **Unrelated sound in the transcript:** system-output capture includes other   apps playing through
-  the default output device.
-- **Speaker names:** only the two sources are distinguished; several remote   participants share the
-  **Them** label.
-- **Delayed text:** transcription is segment-based and may lag on slower   hardware or networks. It
-  is not word-by-word live captioning.
-- **Cloud errors:** check credentials, model access, connectivity and provider   quota. No
-  transcript audio archive is saved for later recovery.
-- **Updates:** Xnote updates itself from signed GitHub Releases and installs a new version when you
-  close it. Restarting from the updates panel stops a recording in progress.
-
-## Recording preparation
-
-Starting a recording shows an inline progress bar: check setup, load the local model,
-connect to the engine, then prepare audio. Cloud mode skips the local model/engine
-steps. The bar counts completed stages; it does not invent a model-download percentage.
-Elapsed time and the message **Recording has not started yet** stay visible while
-preparation runs, and notes remain editable.
-
-You can cancel preparation, retry after a failure, or inspect the bounded technical
-details. Cancellation cannot silently start a recording afterwards. The local engine
-is accepted only when its HTTP `/health` endpoint reports ready; a listening port alone
-does not count. Startup still allows up to three minutes, so slow storage or blocked
-local connections can still cause a wait. The engine/model remain in the portable
-`Data/engine` folder; this change does not introduce an SSD model cache.
+Details: [Data and privacy](docs/PRIVACY.md) · [Limits and troubleshooting](docs/TROUBLESHOOTING.md)
 
 ## Use with Claude, Codex, Cursor and other AI assistants
 
@@ -96,6 +54,8 @@ local connections can still cause a wait. The engine/model remain in the portabl
 so the AI assistant you already use can read your meetings and write summaries, without an API key
 in Xnote. The assistant starts it when needed; no network port is opened. **Settings → AI assistants**
 shows the configuration for each assistant, with your exe path, ready to copy.
+
+![Settings → AI assistants: three steps to connect Claude, Codex or Cursor](docs/images/assistants.png)
 
 Claude Code:
 

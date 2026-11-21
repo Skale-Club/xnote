@@ -13,7 +13,9 @@ Tamanho de cada tarefa: **P** (até meio dia) · **M** (1–2 dias) · **G** (3+
 | 1 | ✅ Feita (provedores, adaptadores OpenAI-compatível e Anthropic, migração, testes) |
 | 2 | ✅ Feita (configuração guiada com tutorial por provedor, resumo opcional, cartão de Provedores). A divisão do `app.js` começou com `providers-ui.js` e `guides.js` |
 | MCP | ✅ Feito: assistentes de IA (Claude, Codex, Cursor) leem as reuniões e salvam resumos (`save_summary`, prompt `summarize_meeting`), cartão nas Configurações com a configuração de cada um. ChatGPT não se conecta a apps locais |
-| 3–5 | A fazer |
+| 3 | ✅ Feita: fila de áudio quando a nuvem falha, log, seção Ajuda com diagnóstico, avisos de pasta sem permissão e de silêncio |
+| 4 | ✅ Feita: selo de privacidade por reunião, estilos de resumo, busca no conteúdo, atalhos, acessibilidade |
+| 5 | ✅ Código pronto: assinatura opcional no release, README com capturas, PRIVACY/TROUBLESHOOTING/SIGNING, checklist. Falta o que depende de pessoa: teste no PC, repositório público, merge e `release.ps1 1.0.0` ([RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)) |
 
 Decisões tomadas: repositório público, licença MIT, resumo **opcional** e desligado por padrão
 (o Xnote funciona só com transcrição, sem nenhuma API).

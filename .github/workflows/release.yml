@@ -13,6 +13,9 @@ permissions:
 jobs:
   release:
     runs-on: windows-latest
+    env:
+      # Read by the optional code-signing step's condition.
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -54,14 +57,38 @@ jobs:
 
       - run: npm run build
 
+      - name: Prepare the release folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item src-tauri/target/release/xnote.exe dist/Xnote.exe
+
+      # Optional Windows code signing (Authenticode), so SmartScreen does not
+      # warn on download. Runs only when the Azure Trusted Signing secrets are
+      # set; see docs/SIGNING.md. It must come before the updater signature,
+      # which covers the final bytes of the exe.
+      - name: Code-sign the exe (Azure Trusted Signing)
+        if: ${{ env.AZURE_CLIENT_ID != '' }}
+        uses: azure/trusted-signing-action@v0.5.0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_CERTIFICATE_PROFILE }}
+          files-folder: dist
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
       - name: Sign for the in-app updater
         shell: pwsh
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
-          New-Item -ItemType Directory dist | Out-Null
-          Copy-Item src-tauri/target/release/xnote.exe dist/Xnote.exe
           $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
           npx tauri signer sign --app-version $version dist/Xnote.exe
           if ($LASTEXITCODE -ne 0) { throw 'Signing failed' }

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.0 — first public release (date set when tagged)
 
 - **Any large AI provider, with your own key or your own computer.** Transcription: on this
   computer (whisper.cpp), Groq, OpenAI or any OpenAI-compatible address. Summaries: Groq, OpenAI,

@@ -48,6 +48,10 @@ Manager.
   an entry to `BUILT_IN` and a guide for it in `src/guides.js` (EN, PT and ES).
 - `cloud.rs` transcribes with any provider that can; `ai.rs` writes the optional summaries.
 - `settings.rs` holds `Data/xnote.json`. `summaryProvider` empty means summaries are off.
+- `pending.rs` keeps segments whose cloud transcription failed and `retry_pending` in `main.rs`
+  sends them again; `applog.rs` writes `Data/logs` (never keys or meeting text).
+- `commands/help.rs` (Help section, diagnostics) and `commands/assistants.rs` (AI assistants
+  section). Over MCP, `save_summary` writes summaries when `assistantsCanWrite` allows it.
 - `commands/providers.rs` has the Tauri commands of the setup and the Providers card.
 - In the window, `providers-ui.js` draws the guided setup and Settings; `guides.js` holds their
   texts and the per-provider guides; `app.js` the meeting list and page.
@@ -55,6 +59,9 @@ Manager.
 All four apps use the same palette: navy surfaces, primary blue `#5173D6` and soft blue `#8FA9EE`.
 Keep English, Portuguese and Spanish UI strings consistent. Settings and application data use the
 portable data directory; do not commit runtime data, API credentials or private signing keys.
+
+Release steps for 1.0 are in [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md); Windows code signing
+in [SIGNING.md](SIGNING.md).
 
 ## Local MCP server
 
