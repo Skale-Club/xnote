@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Move to the Skale Club family design (skale.css v2) with Xnote's voice-violet signal: the selected
+  meeting, the meeting header, the welcome screen, your own transcript lines and the recording
+  preparation follow the signal; text on signal fills uses dark ink. Day groups and the transcript
+  title are silkscreen labels; timers, timestamps, sizes and download progress use mono readouts.
+- Replace the note-and-waveform symbol with the family mark (violet tile, quote marks) in the
+  interface and the Windows executable. `make-icon.ps1` renders it with the shared
+  `render-mark.ps1`, without npm.
+
 ## 0.2.0 — 2026-11-04
 
 - Internal signed downloads and updates through a stable per-app manifest endpoint.

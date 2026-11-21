@@ -131,12 +131,12 @@ function renderSidebar() {
   let html = '', lastDay = '';
   for (const m of list) {
     const day = dayLabel(m.created);
-    if (day !== lastDay) { html += `<div class="day">${esc(day)}</div>`; lastDay = day; }
+    if (day !== lastDay) { html += `<div class="day silk">${esc(day)}</div>`; lastDay = day; }
     const dot = recording && recording.id === m.id ? '<span class="rec-dot"></span>' : '';
     const meta = [timeOf(m.created), m.durationMs ? duration(m.durationMs) : ''].filter(Boolean).join(' · ');
     const title = m.broken ? t('unreadable') : m.title || t('untitled');
     html += `<button class="item${meeting && meeting.id === m.id && view === 'meeting' ? ' on' : ''}" data-id="${esc(m.id)}">` +
-      `<span class="t${m.title && !m.broken ? '' : ' untitled'}">${dot}${esc(title)}</span><span class="m">${esc(meta)}</span></button>`;
+      `<span class="t${m.title && !m.broken ? '' : ' untitled'}">${dot}${esc(title)}</span><span class="m readout">${esc(meta)}</span></button>`;
   }
   $('list').innerHTML = html;
 }
@@ -152,7 +152,7 @@ function renderHead() {
   if (here && recording.phase === 'recording') {
     rec = `<div class="meters"><div class="meter me">${esc(t('me'))}<span class="bar"><i id="lv-me"></i></span></div>` +
       `<div class="meter them">${esc(t('them'))}<span class="bar"><i id="lv-them"></i></span></div></div>` +
-      `<span class="timer" id="timer"></span><button class="btn rec" data-act="stop">${svg(ICONS.stop)}${esc(t('stop'))}</button>`;
+      `<span class="timer readout" id="timer"></span><button class="btn rec" data-act="stop">${svg(ICONS.stop)}${esc(t('stop'))}</button>`;
   } else if (here) {
     const label = engineLoading ? t('loadingEngine') : recording.phase === 'finishing' ? t('finishing') : '…';
     rec = `<button class="btn" disabled>${esc(label)}</button>`;
@@ -197,7 +197,7 @@ function renderNotesPane() {
 }
 
 function lineHtml(l) {
-  return `<div class="line"><span class="time">${clock(l.ms)}</span><span class="who ${l.who === 'me' ? 'me' : 'them'}">${esc(t(l.who))}</span><span>${esc(l.text)}</span></div>`;
+  return `<div class="line"><span class="time readout">${clock(l.ms)}</span><span class="who ${l.who === 'me' ? 'me' : 'them'}">${esc(t(l.who))}</span><span>${esc(l.text)}</span></div>`;
 }
 
 function renderTranscript() {
@@ -214,7 +214,7 @@ function renderTranscript() {
 function renderMeeting() {
   viewEl.innerHTML = '<div class="head" id="head"></div>' +
     '<div class="panes"><section class="pane" id="notes-pane"></section>' +
-    `<section class="pane"><div class="pane-head"><h3>${esc(t('transcript'))}</h3></div><div class="transcript" id="transcript"></div></section></div>`;
+    `<section class="pane"><div class="pane-head"><h3 class="silk">${esc(t('transcript'))}</h3></div><div class="transcript" id="transcript"></div></section></div>`;
   renderHead();
   renderNotesPane();
   renderTranscript();
@@ -375,7 +375,7 @@ function renderSetup() {
     const size = group === 'mode' || installed ? '' : `${SIZES_MB[id]} MB`;
     return `<label class="choice"><input type="radio" name="${group}" value="${id}"${setupChoice[group] === id ? ' checked' : ''}${opts.disabled ? ' disabled' : ''}>` +
       `<div><b>${esc(name)}${tag}</b><span>${esc(opts.disabled ? opts.disabledText : desc)}</span></div>` +
-      `<span class="size">${size}</span></label>`;
+      `<span class="size readout">${size}</span></label>`;
   };
   const modeCard = `<div class="card"><h3>${esc(t('modeCard'))}</h3>` +
     choice('mode', 'local', t('localName'), t('localDesc'), { recommended: status.gpu }) +
@@ -440,7 +440,7 @@ function renderInstallProgress() {
   const bar = (label, p) => {
     if (!p || !p.total) return '';
     const pct = Math.min(100, Math.round((p.done / p.total) * 100));
-    return `<div class="lbl"><span>${esc(label)}</span><span>${Math.round(p.done / 1048576)} / ${Math.round(p.total / 1048576)} MB · ${pct}%</span></div>` +
+    return `<div class="lbl"><span>${esc(label)}</span><span class="readout">${Math.round(p.done / 1048576)} / ${Math.round(p.total / 1048576)} MB · ${pct}%</span></div>` +
       `<div class="pbar"><i style="width:${pct}%"></i></div>`;
   };
   el.innerHTML = bar(t('progEngine'), install.engine) + bar(t('progModel'), install.model) +

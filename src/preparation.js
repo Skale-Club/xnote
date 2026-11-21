@@ -50,7 +50,7 @@ window.XnotePreparation = (() => {
     el().className = `preparation${state.error ? ' has-error' : state.done ? ' complete' : ''}`;
     el().setAttribute('aria-busy', String(!state.done && !state.error));
     el().innerHTML = `<div class="prep-head"><img src="logo.png" alt=""><div class="prep-copy"><b>${escape(title)}</b><span>${escape(state.title)}</span></div>` +
-      `<span class="prep-time" id="prep-time"></span><div class="prep-actions">${buttons}</div></div>` +
+      `<span class="prep-time readout" id="prep-time"></span><div class="prep-actions">${buttons}</div></div>` +
       `<div class="prep-caption"><span role="status" aria-live="polite">${escape(label)}</span><span>${escape(step)}</span></div>` +
       `<div class="prep-track" role="progressbar" aria-valuemin="0" aria-valuemax="${list.length}" aria-valuenow="${index}" aria-valuetext="${escape(label + '. ' + step)}"><i style="width:${index / list.length * 100}%"></i></div>` +
       `<ol class="prep-steps">${list.map((s,i) => `<li class="${i < index ? 'done' : i === index && !state.done ? 'current' : ''}"${i === index && !state.done ? ' aria-current="step"' : ''}>${escape(t(`prep_${s}`))}</li>`).join('')}</ol>` +
