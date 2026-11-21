@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Simplify the sidebar footer: the Made by Skale Club link, the language picker and the version
+  button lose their boxes and tinted background; one hairline separates each group.
+
 ## 0.3.0 — 2026-11-20
 
 - Move to the Skale Club family design (skale.css v2) with Xnote's voice-violet signal: the selected
