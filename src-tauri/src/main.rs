@@ -9,15 +9,18 @@
 mod ai;
 mod audio;
 mod cloud;
+mod commands;
 mod engine;
 mod mcp;
 mod mcp_tools;
 mod meetings;
 mod portable;
+mod providers;
+mod settings;
 mod startup;
 mod updater;
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::json;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
@@ -26,45 +29,7 @@ use std::time::{Duration, Instant};
 use std::{fs, process::Command};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 
-/// Settings kept in Data/xnote.json beside the executable.
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-struct Settings {
-    language: String,
-    /// "auto", "pt", "en" or "es"; also the language of the enhanced notes.
-    transcription_language: String,
-    /// "local" (whisper.cpp on this computer) or "cloud"; empty until chosen.
-    transcription: String,
-    /// Chosen whisper.cpp build ("cuda" / "cpu") and model ("best" / "light").
-    pack: String,
-    model: String,
-    /// Cloud provider: "groq" or "openai".
-    provider: String,
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            language: "en".into(),
-            transcription_language: "auto".into(),
-            transcription: String::new(),
-            pack: String::new(),
-            model: String::new(),
-            provider: "groq".into(),
-        }
-    }
-}
-
-impl Settings {
-    /// Settings from before the cloud option have an engine but no mode.
-    fn mode(&self) -> &str {
-        if self.transcription.is_empty() && !self.pack.is_empty() {
-            "local"
-        } else {
-            &self.transcription
-        }
-    }
-}
+use settings::Settings;
 
 struct Session {
     id: String,
@@ -76,39 +41,29 @@ struct Session {
     levels_stop: Arc<AtomicBool>,
 }
 
-struct AppState {
-    settings: Mutex<Settings>,
+pub(crate) struct AppState {
+    pub(crate) settings: Mutex<Settings>,
     store: meetings::Store,
     startup: startup::Coordinator,
-    server: Mutex<Option<engine::Server>>,
+    pub(crate) server: Mutex<Option<engine::Server>>,
     session: Mutex<Option<Session>>,
     levels: Arc<audio::Levels>,
 }
 
 fn save_settings(settings: &Settings) {
-    if let Ok(text) = serde_json::to_string_pretty(settings) {
-        let _ = fs::write(portable::data_dir().join("xnote.json"), text);
-    }
+    settings::save(settings)
 }
 
-fn load_settings() -> Settings {
-    match fs::read_to_string(portable::data_dir().join("xnote.json")) {
-        // Some editors save UTF-8 with a BOM, which serde_json rejects.
-        Ok(text) => serde_json::from_str(text.trim_start_matches('\u{feff}')).unwrap_or_default(),
-        Err(_) => {
-            let settings = Settings::default();
-            save_settings(&settings);
-            settings
-        }
-    }
+pub(crate) fn load_settings() -> Settings {
+    settings::load()
 }
 
-fn settings(app: &AppHandle) -> Settings {
+pub(crate) fn settings(app: &AppHandle) -> Settings {
     app.state::<AppState>().settings.lock().unwrap().clone()
 }
 
 /// Runs blocking work off the UI thread.
-async fn blocking<T: Send + 'static>(work: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
+pub(crate) async fn blocking<T: Send + 'static>(work: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
     tauri::async_runtime::spawn_blocking(work).await.map_err(|e| e.to_string())?
 }
 
@@ -141,28 +96,65 @@ fn set_transcription_language(state: State<AppState>, language: String) -> Resul
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct EngineInfo {
+struct ProviderInfo {
+    #[serde(flatten)]
+    provider: providers::Provider,
+    has_key: bool,
+    /// A key is saved, or none is needed.
+    ready: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct EngineInfo {
     status: engine::Status,
     mode: String,
     pack: String,
     model: String,
+    /// Cloud transcription provider and model.
     provider: String,
+    transcription_model: String,
     /// Providers with a saved key.
-    cloud_keys: Vec<&'static str>,
+    cloud_keys: Vec<String>,
+    providers: Vec<ProviderInfo>,
+    /// Empty when summaries are off.
+    summary_provider: String,
+    summary_model: String,
+    auto_summary: bool,
+    /// Summaries can run now (provider set up and a model chosen).
+    summary_ready: bool,
 }
 
-fn engine_info(app: &AppHandle) -> EngineInfo {
+pub(crate) fn engine_info(app: &AppHandle) -> EngineInfo {
     engine_info_of(settings(app))
 }
 
-fn engine_info_of(s: Settings) -> EngineInfo {
+pub(crate) fn engine_info_of(s: Settings) -> EngineInfo {
+    let providers: Vec<ProviderInfo> = providers::all(&s.custom_providers)
+        .into_iter()
+        .map(|provider| {
+            let has_key = providers::has_key(&provider);
+            ProviderInfo { ready: has_key || !provider.needs_key, has_key, provider }
+        })
+        .collect();
+    let summary_model = s.find(s.summary_id()).map(|p| s.summary_model_of(&p)).unwrap_or_default();
+    let transcription_model = match s.find(&s.provider) {
+        Some(p) if s.transcription_model.is_empty() => p.transcribe_model,
+        _ => s.transcription_model.clone(),
+    };
     EngineInfo {
         status: engine::status(),
         mode: s.mode().to_string(),
-        pack: s.pack,
-        model: s.model,
-        provider: s.provider,
-        cloud_keys: cloud::PROVIDERS.iter().filter(|p| cloud::has_key(p)).map(|p| p.id).collect(),
+        pack: s.pack.clone(),
+        model: s.model.clone(),
+        provider: s.provider.clone(),
+        transcription_model,
+        cloud_keys: providers.iter().filter(|p| p.has_key).map(|p| p.provider.id.clone()).collect(),
+        summary_ready: s.summarizer().is_some(),
+        summary_provider: s.summary_id().to_string(),
+        summary_model,
+        auto_summary: s.auto_summary,
+        providers,
     }
 }
 
@@ -194,62 +186,17 @@ async fn install_engine(app: AppHandle, pack: String, model: String) -> Result<E
     Ok(engine_info(&app))
 }
 
-/// Checks and stores a cloud provider's key, then transcribes with it.
-#[tauri::command]
-async fn set_cloud_key(app: AppHandle, provider: String, key: String) -> Result<EngineInfo, String> {
-    let p = cloud::provider(&provider).ok_or("unknown provider")?;
-    blocking(move || cloud::set_key(p, &key)).await?;
-    use_cloud(app, provider)
-}
-
-/// Transcribes in the cloud with a provider whose key is already saved.
-#[tauri::command]
-fn use_cloud(app: AppHandle, provider: String) -> Result<EngineInfo, String> {
-    let p = cloud::provider(&provider).ok_or("unknown provider")?;
-    if !cloud::has_key(p) {
-        return Err("no transcription key".into());
-    }
-    let state = app.state::<AppState>();
-    {
-        let mut s = state.settings.lock().unwrap();
-        s.transcription = "cloud".into();
-        s.provider = provider;
-        save_settings(&s);
-    }
-    *state.server.lock().unwrap() = None; // frees the graphics card
-    Ok(engine_info(&app))
-}
-
-#[tauri::command]
-fn clear_cloud_key(app: AppHandle, provider: String) -> Result<EngineInfo, String> {
-    let p = cloud::provider(&provider).ok_or("unknown provider")?;
-    cloud::clear_key(p)?;
-    Ok(engine_info(&app))
-}
-
-/// Opens a provider's API key page in the default browser.
-#[tauri::command]
-fn open_key_page(provider: String) {
-    let url = match provider.as_str() {
-        "groq" => "https://console.groq.com/keys",
-        "openai" => "https://platform.openai.com/api-keys",
-        "anthropic" => "https://console.anthropic.com/settings/keys",
-        _ => return,
-    };
-    let _ = Command::new("explorer.exe").arg(url).spawn();
-}
-
 /// Where the recording's segments get transcribed.
 enum Transcriber {
     Local(u16),
-    Cloud(&'static cloud::Provider),
+    Cloud(providers::Provider, String),
 }
 
 impl Transcriber {
     fn transcribe(&self, samples: &[f32], language: &str) -> Result<Option<String>, String> {
         match self {
             Transcriber::Local(port) => engine::transcribe(*port, samples, language),
-            Transcriber::Cloud(provider) => cloud::transcribe(provider, samples, language),
+            Transcriber::Cloud(provider, model) => cloud::transcribe(provider, model, samples, language),
         }
     }
 }
@@ -261,8 +208,8 @@ fn transcriber(app: &AppHandle, attempt: &startup::Guard<'_>, progress: &mut dyn
     match s.mode() {
         "local" => ensure_server(app, attempt, progress).map(Transcriber::Local),
         "cloud" => {
-            let p = cloud::provider(&s.provider).filter(|p| cloud::has_key(p)).ok_or("engine")?;
-            Ok(Transcriber::Cloud(p))
+            let (p, model) = s.cloud_transcriber().ok_or("engine")?;
+            Ok(Transcriber::Cloud(p, model))
         }
         _ => Err("engine".into()),
     }
@@ -480,21 +427,6 @@ fn recording_state(state: State<AppState>) -> Option<Recording> {
 
 // ---------- AI ----------
 
-#[tauri::command]
-fn has_api_key() -> bool {
-    ai::has_key()
-}
-
-#[tauri::command]
-async fn set_api_key(key: String) -> Result<(), String> {
-    blocking(move || ai::set_key(&key)).await
-}
-
-#[tauri::command]
-fn clear_api_key() -> Result<(), String> {
-    ai::clear_key()
-}
-
 /// Streams the enhanced notes ("enhance-delta" events) and saves them. The
 /// notes are written in the meeting language when one is set.
 #[tauri::command]
@@ -505,8 +437,9 @@ async fn enhance(app: AppHandle, id: String) -> Result<meetings::Meeting, String
         if meeting.transcript.is_empty() && meeting.notes.trim().is_empty() {
             return Err("nothing to enhance".into());
         }
-        let language = settings(&app).transcription_language;
-        let markdown = ai::enhance(&meeting, &language, &mut |piece| {
+        let s = settings(&app);
+        let (provider, model) = s.summarizer().ok_or("no API key")?;
+        let markdown = ai::enhance(&provider, &model, &meeting, &s.transcription_language, &mut |piece| {
             let _ = app.emit("enhance-delta", json!({ "id": id, "text": piece }));
         })?;
         let title = ai::title_of(&markdown);
@@ -611,10 +544,15 @@ fn main() {
             set_transcription_language,
             engine_status,
             install_engine,
-            set_cloud_key,
-            use_cloud,
-            clear_cloud_key,
-            open_key_page,
+            commands::providers::set_cloud_key,
+            commands::providers::use_cloud,
+            commands::providers::set_provider_key,
+            commands::providers::clear_provider_key,
+            commands::providers::list_models,
+            commands::providers::set_summary,
+            commands::providers::add_custom_provider,
+            commands::providers::remove_custom_provider,
+            commands::providers::open_key_page,
             list_meetings,
             get_meeting,
             create_meeting,
@@ -624,9 +562,6 @@ fn main() {
             cancel_recording_start,
             stop_recording,
             recording_state,
-            has_api_key,
-            set_api_key,
-            clear_api_key,
             enhance,
             save_export,
             open_site,

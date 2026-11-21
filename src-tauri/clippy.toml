@@ -1,1 +1,2 @@
 type-complexity-threshold = 400
+large-error-threshold = 512
