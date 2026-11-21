@@ -377,7 +377,7 @@ function render() {
 // ---------- events ----------
 
 $('new-meeting').addEventListener('click', newMeeting);
-$('open-settings').addEventListener('click', () => { view = 'settings'; render(); });
+$('open-settings').addEventListener('click', () => openSettings());
 $('skale').addEventListener('click', () => invoke('open_site'));
 $('search').addEventListener('input', (e) => { search = e.target.value; renderSidebar(); });
 $('list').addEventListener('click', (e) => {
@@ -389,6 +389,8 @@ viewEl.addEventListener('change', handleProviderChange);
 viewEl.addEventListener('input', handleProviderInput);
 
 viewEl.addEventListener('click', (e) => {
+  const section = e.target.closest('[data-section]');
+  if (section) { settingsSection = section.dataset.section; renderSettings(); return; }
   const tab = e.target.closest('[data-tab]');
   if (tab) { notesTab = tab.dataset.tab; renderNotesPane(); return; }
   const el = e.target.closest('[data-act]');

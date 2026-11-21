@@ -124,9 +124,15 @@ test('guides and setup texts have the same keys and placeholders in EN/PT/ES', a
 
 test('Settings show how to connect AI assistants, with this exe in each snippet', async () => {
   const h = await harness({ status: { gpu: true, packs: ['cuda'], models: ['best'] }, mode: 'local', pack: 'cuda', model: 'best' });
-  h.run("view = 'settings'; render()");
+  h.run("openSettings()");
+  // One section at a time: General first, with the side menu.
+  assert.match(h.html(), /data-section="assistants"/);
+  assert.match(h.html(), /id="app-lang"/);
+  assert.doesNotMatch(h.html(), /mcpServers/);
+  h.run("openSettings('assistants')");
   await flush(); await flush();
-  assert.match(h.html(), /AI assistants \(MCP\)/);
+  assert.match(h.html(), /<h2>AI assistants<\/h2>/);
+  assert.match(h.html(), /Choose the assistant you use/);
   // JSON escapes the backslashes of the Windows path.
   assert.match(h.html(), /&quot;command&quot;: &quot;C:\\\\Apps\\\\Xnote\\\\Xnote\.exe&quot;/);
   h.change({ id: 'assistant-client', value: 'claude-code' });

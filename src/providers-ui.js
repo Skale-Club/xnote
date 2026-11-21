@@ -14,6 +14,7 @@ let keyOpen = null;         // provider whose key field is open in the Providers
 const modelLists = {};      // provider id → { state: loading | ok | error, list, error }
 let assistant = null;       // { exe, canWrite } for the AI assistants card
 let assistantClient = 'claude-desktop';
+let settingsSection = 'general'; // general | transcription | summary | providers | assistants | privacy
 
 const providerById = (id) => engine?.providers?.find((p) => p.id === id);
 const providerName = (id) => providerById(id)?.name || id;
@@ -382,47 +383,71 @@ function providersCard() {
     `<div class="row"><input id="custom-key" class="field" type="password" placeholder="${esc(t('customKey'))}" autocomplete="off" aria-label="${esc(t('customKey'))}"></div>` +
     `<label class="check"><input type="checkbox" id="custom-stt"> ${esc(t('customTranscribes'))}</label>` +
     `<div class="row"><button class="btn primary" data-act="add-custom">${esc(t('add'))}</button></div></details>`;
-  return `<div class="card"><h3>${esc(t('providersCard'))}</h3><p class="note">${esc(t('providersNote'))}</p>${rows}${custom}</div>`;
+  return `<div class="card">${rows}${custom}</div><p class="note">${esc(t('providersNote'))}</p>`;
+}
+
+const SETTINGS_SECTIONS = ['general', 'transcription', 'summary', 'providers', 'assistants', 'privacy'];
+
+function settingsBody(section) {
+  const opt = (value, label, current) => `<option value="${value}"${value === current ? ' selected' : ''}>${esc(label)}</option>`;
+  const cloud = engine?.mode === 'cloud';
+  if (section === 'general') {
+    return `<div class="card"><div class="row"><span class="row-label">${esc(t('appLanguage'))}</span>` +
+      `<select id="app-lang" class="field">${opt('en', 'English', language)}${opt('pt', 'Português', language)}${opt('es', 'Español', language)}</select></div>` +
+      `<div class="row"><span class="row-label">${esc(t('meetingLanguage'))}</span><select id="meet-lang" class="field">` +
+      opt('auto', t('auto'), settings.transcriptionLanguage) + opt('pt', 'Português', settings.transcriptionLanguage) +
+      opt('en', 'English', settings.transcriptionLanguage) + opt('es', 'Español', settings.transcriptionLanguage) +
+      `</select></div><p class="note">${esc(t('meetingLanguageNote'))}</p></div>`;
+  }
+  if (section === 'transcription') {
+    const current = cloud
+      ? [t('cloudName'), providerName(engine.provider), engine.transcriptionModel]
+      : engine?.mode === 'local'
+        ? [t('localName'), { cuda: t('gpuName'), cpu: t('cpuName') }[engine.pack], { best: t('bestName'), light: t('lightName') }[engine.model]]
+        : ['—'];
+    return `<div class="card"><div class="row"><span class="row-label">${esc(t('currentSetup'))}</span><b>${esc(current.filter(Boolean).join(' · '))}</b>` +
+      `<button class="btn small" data-act="setup">${esc(t('change'))}</button></div></div>`;
+  }
+  if (section === 'summary') {
+    const sum = providerById(engine.summaryProvider);
+    const state = !sum ? t('summaryOff') : engine.summaryReady ? t('summaryOn', { name: sum.name, model: engine.summaryModel }) : t('summaryNotReady', { name: sum.name });
+    return `<p class="status-line">${esc(state)}</p><div class="card">${summaryPicker()}</div>` +
+      `<div class="setup-actions"><button class="btn primary" data-act="save-summary">${esc(t('save'))}</button></div>`;
+  }
+  if (section === 'providers') return providersCard();
+  if (section === 'assistants') return assistantsCard();
+  const names = recipients();
+  return `<div class="card"><p>${esc(cloud ? t('privacyCloud', { name: providerName(engine.provider) }) : t('privacy'))}</p>` +
+    `<p class="note">${esc(names.length ? t('privacySent', { names: names.join(', ') }) : t('privacyAllLocal'))}</p>` +
+    `<p class="note">${esc(t('keysNote'))}</p></div>`;
 }
 
 function renderSettings() {
   if (!sumChoice) initSumChoice();
-  const opt = (value, label, current) => `<option value="${value}"${value === current ? ' selected' : ''}>${esc(label)}</option>`;
-  const cloud = engine?.mode === 'cloud';
-  const transcription = cloud
-    ? [t('cloudName'), providerName(engine.provider), engine.transcriptionModel]
-    : engine?.mode === 'local'
-      ? [t('localName'), { cuda: t('gpuName'), cpu: t('cpuName') }[engine.pack], { best: t('bestName'), light: t('lightName') }[engine.model]]
-      : ['—'];
-  const sum = providerById(engine.summaryProvider);
-  const sumState = !sum ? t('summaryOff') : engine.summaryReady ? t('summaryOn', { name: sum.name, model: engine.summaryModel }) : t('summaryNotReady', { name: sum.name });
-  const names = recipients();
-  viewEl.innerHTML =
-    `<div class="page"><h1>${esc(t('settings'))}</h1><p></p>` +
-    `<div class="card"><h3>${esc(t('langCard'))}</h3><div class="row" style="margin-bottom:12px"><span class="row-label">${esc(t('appLanguage'))}</span>` +
-    `<select id="app-lang" class="field">${opt('en', 'English', language)}${opt('pt', 'Português', language)}${opt('es', 'Español', language)}</select></div>` +
-    `<div class="row"><span class="row-label">${esc(t('meetingLanguage'))}</span><select id="meet-lang" class="field">` +
-    opt('auto', t('auto'), settings.transcriptionLanguage) + opt('pt', 'Português', settings.transcriptionLanguage) +
-    opt('en', 'English', settings.transcriptionLanguage) + opt('es', 'Español', settings.transcriptionLanguage) +
-    `</select></div><p class="note">${esc(t('meetingLanguageNote'))}</p></div>` +
-    `<div class="card"><h3>${esc(t('engineSettingsCard'))}</h3><div class="row"><span>${esc(transcription.filter(Boolean).join(' · '))}</span>` +
-    `<button class="btn small" data-act="setup">${esc(t('change'))}</button></div></div>` +
-    `<div class="card" id="summary-card"><h3>${esc(t('aiSummaryCard'))}</h3><p class="note">${esc(sumState)}</p>${summaryPicker()}` +
-    `<div class="row"><button class="btn primary" data-act="save-summary">${esc(t('save'))}</button></div></div>` +
-    providersCard() + assistantsCard() +
-    `<div class="card"><h3>${esc(t('privacyCard'))}</h3><p class="note" style="margin:0">` +
-    `${esc(cloud ? t('privacyCloud', { name: providerName(engine.provider) }) : t('privacy'))} ` +
-    `${esc(names.length ? t('privacySent', { names: names.join(', ') }) : t('privacyAllLocal'))}</p></div></div>`;
-  $('app-lang').addEventListener('change', (e) => {
+  const section = SETTINGS_SECTIONS.includes(settingsSection) ? settingsSection : 'general';
+  const nav = SETTINGS_SECTIONS.map((id) =>
+    `<button class="nav-item${id === section ? ' on' : ''}" data-section="${id}"${id === section ? ' aria-current="page"' : ''}>${esc(t(`nav_${id}`))}</button>`).join('');
+  viewEl.innerHTML = `<div class="page settings"><h1>${esc(t('settings'))}</h1>` +
+    `<div class="settings-grid"><nav class="settings-nav" aria-label="${esc(t('settings'))}">${nav}</nav>` +
+    `<section class="settings-body"><h2>${esc(t(`nav_${section}`))}</h2><p class="lead">${esc(t(`desc_${section}`))}</p>${settingsBody(section)}</section></div></div>`;
+  $('app-lang')?.addEventListener('change', (e) => {
     setLanguage(e.target.value);
     settings.language = language;
     invoke('set_language', { language });
     render();
   });
-  $('meet-lang').addEventListener('change', (e) => {
+  $('meet-lang')?.addEventListener('change', (e) => {
     settings.transcriptionLanguage = e.target.value;
     invoke('set_transcription_language', { language: e.target.value });
   });
+}
+
+/** Opens Settings at a section. */
+function openSettings(section = 'general') {
+  settingsSection = section;
+  sumChoice = null;
+  view = 'settings';
+  render();
 }
 
 async function addCustom(button) {
@@ -460,16 +485,19 @@ function assistantsCard() {
     invoke('assistant_info').then((info) => { assistant = info; if (view === 'settings') renderSettings(); });
     return '';
   }
-  const clients = [['claude-desktop', 'Claude Desktop'], ['claude-code', 'Claude Code'], ['codex', 'Codex'], ['cursor', 'Cursor'], ['other', 'Other / Outro']];
+  const clients = [['claude-desktop', 'Claude Desktop'], ['claude-code', 'Claude Code'], ['codex', 'Codex'], ['cursor', 'Cursor'], ['other', t('otherClient')]];
   const opt = ([id, name]) => `<option value="${id}"${id === assistantClient ? ' selected' : ''}>${esc(name)}</option>`;
   const [where, snippet] = assistantSnippet(assistantClient, assistant.exe);
-  return `<div class="card" id="assistants-card"><h3>${esc(t('assistantsCard'))}</h3><p class="note">${esc(t('assistantsText'))}</p>` +
-    `<div class="row"><span class="row-label">${esc(t('assistantsPick'))}</span><select id="assistant-client" class="field" aria-label="${esc(t('assistantsPick'))}">${clients.map(opt).join('')}</select></div>` +
-    `<p class="note">${esc(t('assistantsWhere'))}: ${esc(where)}</p>` +
-    `<div class="snippet"><pre>${esc(snippet)}</pre><button class="btn small" data-act="copy-code" data-code="${esc(snippet)}">${svg(ICONS.copy)}${esc(t('copy'))}</button></div>` +
-    `<p class="note">${esc(t('assistantsAsk'))}</p>` +
+  const step = (n, title, body) => `<li class="step"><span class="step-n">${n}</span><div><b>${esc(title)}</b>${body}</div></li>`;
+  return `<ol class="steps-list card">` +
+    step(1, t('asStep1'), `<div class="row"><select id="assistant-client" class="field" aria-label="${esc(t('assistantsPick'))}">${clients.map(opt).join('')}</select></div>`) +
+    step(2, t('asStep2'), `<p class="note">${esc(where)}</p><div class="snippet"><pre>${esc(snippet)}</pre>` +
+      `<button class="btn small" data-act="copy-code" data-code="${esc(snippet)}">${svg(ICONS.copy)}${esc(t('copy'))}</button></div>`) +
+    step(3, t('asStep3'), `<p class="note">${esc(t('assistantsAsk'))}</p>`) +
+    `</ol><div class="card"><h3>${esc(t('permissionCard'))}</h3>` +
     `<label class="check"><input type="checkbox" id="assistants-write"${assistant.canWrite ? ' checked' : ''}> ${esc(t('assistantsWrite'))}</label>` +
-    `<p class="note">${esc(t('assistantsPrivacy'))}</p><p class="note">${esc(t('chatgptNote'))}</p></div>`;
+    `<p class="note">${esc(t('assistantsPrivacy'))}</p></div>` +
+    `<p class="note">${esc(t('chatgptNote'))}</p>`;
 }
 
 // ---------- events ----------
@@ -499,7 +527,7 @@ function handleProviderAct(act, el) {
     setupFlow = 'change';
     setupStep = 1;
     if (meeting) { view = 'meeting'; render(); } else newMeeting();
-  } else if (act === 'setup-summary') { sumChoice = null; view = 'settings'; render(); $('summary-card')?.scrollIntoView(); }
+  } else if (act === 'setup-summary') openSettings('summary');
   else return false;
   return true;
 }
