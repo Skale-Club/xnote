@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- **Any large AI provider, with your own key or your own computer.** Transcription: on this
+  computer (whisper.cpp), Groq, OpenAI or any OpenAI-compatible address. Summaries: Groq, OpenAI,
+  OpenRouter, Anthropic (Claude), Google Gemini, Mistral, DeepSeek, Ollama, LM Studio or any
+  compatible address. Models are listed from the provider and can be typed freely.
+- **AI summaries are optional.** Xnote records and transcribes with no API at all; a summary
+  provider can be added at any time. Settings from earlier versions with an OpenAI key keep
+  summarizing with OpenAI.
+- **Guided first run** in three steps, with a short step-by-step guide for each provider.
+- Settings: AI summary card and a Providers and keys card (add, test and remove keys; add
+  compatible providers). The privacy note lists who receives audio or text.
+- Free and open source under the MIT License; CI checks every push; strict content security policy.
+
 ## 0.3.1 — 2026-11-20
 
 - Simplify the sidebar footer: the Made by Skale Club link, the language picker and the version

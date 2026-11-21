@@ -19,7 +19,7 @@ npm ci
 npm run dev
 ~~~
 
-Private repositories require an authenticated GitHub account with access. The frontend is plain
+The frontend is plain
 HTML, CSS and JavaScript served by Tauri 2; opening the HTML directly in a browser does not provide
 the native commands.
 
@@ -39,9 +39,18 @@ belongs beside that executable, including when running a development build.
 ## Architecture
 
 Rust captures microphone and default system-output audio, splits speech into segments and
-transcribes with a local whisper.cpp server or a cloud provider. Meetings are JSON documents. The
-OpenAI Responses API generates enhanced notes; JavaScript renders streamed text, editable notes and
-the transcript. API keys use Windows Credential Manager.
+transcribes with a local whisper.cpp server or a cloud provider. Meetings are JSON documents.
+JavaScript renders streamed text, editable notes and the transcript. API keys use Windows Credential
+Manager.
+
+- `providers.rs` lists the providers. Most speak the OpenAI API (`/chat/completions`,
+  `/audio/transcriptions`, `/models`); Anthropic has its own adapter. To add a built-in provider, add
+  an entry to `BUILT_IN` and a guide for it in `src/guides.js` (EN, PT and ES).
+- `cloud.rs` transcribes with any provider that can; `ai.rs` writes the optional summaries.
+- `settings.rs` holds `Data/xnote.json`. `summaryProvider` empty means summaries are off.
+- `commands/providers.rs` has the Tauri commands of the setup and the Providers card.
+- In the window, `providers-ui.js` draws the guided setup and Settings; `guides.js` holds their
+  texts and the per-provider guides; `app.js` the meeting list and page.
 
 All four apps use the same palette: navy surfaces, primary blue `#5173D6` and soft blue `#8FA9EE`.
 Keep English, Portuguese and Spanish UI strings consistent. Settings and application data use the

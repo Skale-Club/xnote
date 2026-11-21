@@ -5,6 +5,18 @@ chaves de API** ou **o próprio computador**, sem ficar presa a um provedor.
 
 Tamanho de cada tarefa: **P** (até meio dia) · **M** (1–2 dias) · **G** (3+ dias).
 
+## Status
+
+| Fase | Situação |
+|---|---|
+| 0 | ✅ Feita (CI, CSP, MIT, arquivos de comunidade). A divisão do `main.rs` começou com `commands/providers.rs` e `settings.rs` |
+| 1 | ✅ Feita (provedores, adaptadores OpenAI-compatível e Anthropic, migração, testes) |
+| 2 | ✅ Feita (configuração guiada com tutorial por provedor, resumo opcional, cartão de Provedores). A divisão do `app.js` começou com `providers-ui.js` e `guides.js` |
+| 3–5 | A fazer |
+
+Decisões tomadas: repositório público, licença MIT, resumo **opcional** e desligado por padrão
+(o Xnote funciona só com transcrição, sem nenhuma API).
+
 ---
 
 ## Visão geral das fases
