@@ -6,6 +6,9 @@
 
 const GUIDE_TEXT = {
   en: {
+    sumStyle: 'Summary style', style_general: 'General', style_sales: 'Sales or client call', style_one_on_one: 'One-on-one', style_standup: 'Daily stand-up', style_interview: 'Interview',
+    badgeLocal: '🔒 Only on this PC', badgeLocalTip: 'No audio or text of this meeting left the computer.',
+    badgeCloud: '☁ Sent to {names}', badgeCloudTip: 'Services that received audio or text of this meeting.',
     nav_help: 'Help', desc_help: 'Version, where your files are, and what to send when something goes wrong.',
     version: 'Version', dataFolder: 'Data folder', openFolder: 'Open folder', waitingAudio: 'Audio waiting',
     pendingCount: '{n} part(s) of a meeting waiting for the connection', nothingWaiting: 'Nothing waiting', sendNow: 'Send now',
@@ -75,6 +78,9 @@ const GUIDE_TEXT = {
     noModel: 'Choose a model first.', localDownloadNote: 'Downloaded once into the Data folder next to Xnote.',
   },
   pt: {
+    sumStyle: 'Estilo do resumo', style_general: 'Geral', style_sales: 'Vendas ou cliente', style_one_on_one: 'Conversa 1:1', style_standup: 'Daily', style_interview: 'Entrevista',
+    badgeLocal: '🔒 Só neste PC', badgeLocalTip: 'Nenhum áudio ou texto desta reunião saiu do computador.',
+    badgeCloud: '☁ Enviado para {names}', badgeCloudTip: 'Serviços que receberam áudio ou texto desta reunião.',
     nav_help: 'Ajuda', desc_help: 'Versão, onde ficam seus arquivos e o que enviar quando algo der errado.',
     version: 'Versão', dataFolder: 'Pasta Data', openFolder: 'Abrir pasta', waitingAudio: 'Áudio aguardando',
     pendingCount: '{n} trecho(s) de reunião aguardando conexão', nothingWaiting: 'Nada aguardando', sendNow: 'Enviar agora',
@@ -144,6 +150,9 @@ const GUIDE_TEXT = {
     noModel: 'Escolha um modelo primeiro.', localDownloadNote: 'Baixado uma vez na pasta Data, ao lado do Xnote.',
   },
   es: {
+    sumStyle: 'Estilo del resumen', style_general: 'General', style_sales: 'Ventas o cliente', style_one_on_one: 'Conversación 1:1', style_standup: 'Daily', style_interview: 'Entrevista',
+    badgeLocal: '🔒 Solo en este PC', badgeLocalTip: 'Ningún audio ni texto de esta reunión salió del equipo.',
+    badgeCloud: '☁ Enviado a {names}', badgeCloudTip: 'Servicios que recibieron audio o texto de esta reunión.',
     nav_help: 'Ayuda', desc_help: 'Versión, dónde están tus archivos y qué enviar cuando algo falla.',
     version: 'Versión', dataFolder: 'Carpeta Data', openFolder: 'Abrir carpeta', waitingAudio: 'Audio en espera',
     pendingCount: '{n} fragmento(s) de reunión esperando conexión', nothingWaiting: 'Nada en espera', sendNow: 'Enviar ahora',

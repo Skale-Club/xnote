@@ -260,6 +260,7 @@ function initSumChoice() {
     provider: p ? p.id : '',
     model: p ? engine.summaryModel : '',
     auto: engine.autoSummary,
+    style: engine.summaryStyle || 'general',
   };
 }
 
@@ -287,6 +288,9 @@ function summaryPicker() {
       `<select id="sum-provider" class="field" aria-label="${esc(t('sumProvider'))}">${list.map(opt).join('')}</select>${providerTags(p)}</div>` +
       guideFor(p) + keyHtml(p) +
       modelHtml(p, sumChoice.model, 'sum-model', t('sumModel')) +
+      `<div class="row"><span class="row-label">${esc(t('sumStyle'))}</span><select id="sum-style" class="field" aria-label="${esc(t('sumStyle'))}">` +
+      ['general', 'sales', 'one_on_one', 'standup', 'interview'].map((id) => `<option value="${id}"${id === sumChoice.style ? ' selected' : ''}>${esc(t(`style_${id}`))}</option>`).join('') +
+      `</select></div>` +
       `<label class="check"><input type="checkbox" id="sum-auto"${sumChoice.auto ? ' checked' : ''}> ${esc(t('sumAuto'))}</label></div>`;
   }
   return choiceHtml('sumkind', 'off', t('sumOffName'), t('sumOffDesc'), { tag: tagOf(t('freeOnly'), 'free') }) +
@@ -297,7 +301,7 @@ function summaryPicker() {
 /** Saves the summary choice; a key typed but not checked is checked first. */
 async function saveSummary() {
   if (sumChoice.kind === 'off') {
-    engine = await invoke('set_summary', { provider: '', model: '', auto: sumChoice.auto });
+    engine = await invoke('set_summary', { provider: '', model: '', auto: sumChoice.auto, style: sumChoice.style });
     return true;
   }
   let p = providerById(sumChoice.provider);
@@ -308,7 +312,7 @@ async function saveSummary() {
   const model = (sumChoice.model || '').trim(); // kept in step by handleProviderInput
   if (!model) { toast(t('noModel')); $('sum-model')?.focus(); return false; }
   try {
-    engine = await invoke('set_summary', { provider: p.id, model, auto: sumChoice.auto });
+    engine = await invoke('set_summary', { provider: p.id, model, auto: sumChoice.auto, style: sumChoice.style });
     return true;
   } catch (e) {
     toast(providerError(e, p));
@@ -568,6 +572,7 @@ function handleProviderChange(e) {
   else if (el.name === 'sumkind') { sumChoice.kind = el.value; sumChoice.provider = ''; rerender(); }
   else if (el.id === 'sum-provider') { selectSumProvider(el.value); rerender(); }
   else if (el.id === 'sum-auto') sumChoice.auto = el.checked;
+  else if (el.id === 'sum-style') sumChoice.style = el.value;
   else if (el.id === 'assistant-client') { assistantClient = el.value; renderSettings(); }
   else if (el.id === 'assistants-write') {
     assistant.canWrite = el.checked;

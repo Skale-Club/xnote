@@ -28,6 +28,7 @@ async function harness(engineOverrides = {}) {
     list_models: ['llama3.2', 'qwen3'],
     help_info: { version: '1.0.0', dataFolder: 'C:\\Apps\\Xnote\\Data', writable: true, pending: 2 },
     diagnostics: 'Xnote 1.0.0',
+    search_meeting_ids: ['2'],
     assistant_info: { exe: 'C:\\Apps\\Xnote\\Xnote.exe', canWrite: true },
   };
   const invoke = async (command, args) => {
@@ -71,7 +72,7 @@ test('local transcription with no AI summary needs no key at all', async () => {
   assert.match(h.html(), /value="off" checked/, 'summaries start off');
   await h.act('summary-next');
   const call = h.calls.find((c) => c.command === 'set_summary');
-  assert.deepEqual({ ...call.args }, { provider: '', model: '', auto: true });
+  assert.deepEqual({ ...call.args }, { provider: '', model: '', auto: true, style: 'general' });
   assert.match(h.html(), /Step 3 of 3/);
   assert.match(h.html(), /Everything stays on this computer/);
   assert.equal(h.calls.some((c) => c.command === 'set_provider_key'), false);
@@ -157,4 +158,15 @@ test('Help shows the version, the Data folder and audio waiting for the connecti
   assert.match(h.html(), /data-act="copy-diagnostics"/);
   h.run('showPending(0)');
   assert.equal(h.node('notice-bar').hidden, true);
+});
+
+test('each meeting shows where its data went, and search also finds text inside meetings', async () => {
+  const h = await harness({ status: { gpu: true, packs: ['cuda'], models: ['best'] }, mode: 'local', pack: 'cuda', model: 'best' });
+  h.run("meeting = { id: 'm', title: '', created: 0, durationMs: 0, transcript: [], notes: '', sentTo: [] }; view = 'meeting'; renderMeeting()");
+  assert.match(h.node('head').innerHTML, /Only on this PC/);
+  h.run("meeting.sentTo = ['Groq', 'OpenAI']; renderHead()");
+  assert.match(h.node('head').innerHTML, /Sent to Groq, OpenAI/);
+  h.run("meetings = [{ id: '1', title: 'Budget', created: 0 }, { id: '2', title: 'Weekly', created: 0 }]; search = 'invoice'; searchIds = new Set(['2']); renderSidebar()");
+  assert.match(h.node('list').innerHTML, /Weekly/);
+  assert.doesNotMatch(h.node('list').innerHTML, /Budget/);
 });

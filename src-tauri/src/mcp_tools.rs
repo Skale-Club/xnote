@@ -34,6 +34,7 @@ fn save_summary(store: &meetings::Store, id: &str, markdown: &str) -> Result<Val
     let title = crate::ai::title_of(markdown);
     for _ in 0..3 {
         let saved = store.update(id, |m| {
+            m.mark_sent_to("AI assistant (MCP)");
             m.enhanced = markdown.to_string();
             if m.title.trim().is_empty() {
                 if let Some(title) = &title {
@@ -63,7 +64,12 @@ fn summary_prompt(store: &meetings::Store, args: &Value) -> Result<Value, String
     } else {
         "Show the notes to me; saving into Xnote is turned off.".to_string()
     };
-    Ok(json!([mcp::user_message(format!("{}\n\n{}\n\n{save}", crate::ai::SYSTEM, crate::ai::prompt(&meeting, &language)))]))
+    let style = crate::ai::style_instructions(&settings.summary_style);
+    Ok(json!([mcp::user_message(format!(
+        "{}\n\n{}\n\n{style}\n\n{save}",
+        crate::ai::SYSTEM,
+        crate::ai::prompt(&meeting, &language)
+    ))]))
 }
 
 /// Around `at` in `text`, cut at character boundaries.
@@ -89,7 +95,7 @@ fn position(text: &str, query: &str) -> Option<usize> {
 }
 
 /// Where `query` shows up in `meeting`.
-fn hits(meeting: &Meeting, query: &str) -> Vec<Value> {
+pub(crate) fn hits(meeting: &Meeting, query: &str) -> Vec<Value> {
     let query = query.to_lowercase();
     let mut found = Vec::new();
     for (field, text) in [("title", &meeting.title), ("notes", &meeting.notes), ("enhanced", &meeting.enhanced)] {

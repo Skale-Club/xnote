@@ -69,7 +69,17 @@ pub fn use_cloud(app: AppHandle, provider: String, model: Option<String>) -> Res
 /// Chooses who writes the summaries. An empty provider turns them off:
 /// Xnote then only records and transcribes.
 #[tauri::command]
-pub fn set_summary(app: AppHandle, provider: String, model: String, auto: bool) -> Result<EngineInfo, String> {
+pub fn set_summary(
+    app: AppHandle,
+    provider: String,
+    model: String,
+    auto: bool,
+    style: Option<String>,
+) -> Result<EngineInfo, String> {
+    let style = style.unwrap_or_else(|| "general".into());
+    if !crate::ai::STYLES.contains(&style.as_str()) {
+        return Err("unknown style".into());
+    }
     if !provider.is_empty() {
         let p = find(&app, &provider)?;
         if !p.can_summarize {
@@ -82,6 +92,7 @@ pub fn set_summary(app: AppHandle, provider: String, model: String, auto: bool) 
         s.summary_provider = Some(provider);
         s.summary_model = model.trim().to_string();
         s.auto_summary = auto;
+        s.summary_style = style;
         save_settings(&s);
     }
     Ok(engine_info(&app))

@@ -123,6 +123,7 @@ pub(crate) struct EngineInfo {
     summary_provider: String,
     summary_model: String,
     auto_summary: bool,
+    summary_style: String,
     /// Summaries can run now (provider set up and a model chosen).
     summary_ready: bool,
 }
@@ -156,6 +157,7 @@ pub(crate) fn engine_info_of(s: Settings) -> EngineInfo {
         summary_provider: s.summary_id().to_string(),
         summary_model,
         auto_summary: s.auto_summary,
+        summary_style: s.summary_style.clone(),
         providers,
     }
 }
@@ -307,6 +309,23 @@ fn get_meeting(state: State<AppState>, id: String) -> Result<meetings::Meeting, 
     state.store.get(&id)
 }
 
+/// Ids of the meetings whose title, notes, summary or transcript contain
+/// `query`, for the sidebar search.
+#[tauri::command]
+fn search_meeting_ids(state: State<AppState>, query: String) -> Vec<String> {
+    let query = query.trim();
+    if query.is_empty() {
+        return Vec::new();
+    }
+    state
+        .store
+        .list()
+        .into_iter()
+        .filter(|summary| state.store.get(&summary.id).is_ok_and(|m| !mcp_tools::hits(&m, query).is_empty()))
+        .map(|summary| summary.id)
+        .collect()
+}
+
 #[tauri::command]
 fn create_meeting(state: State<AppState>) -> Result<meetings::Meeting, String> {
     state.store.create()
@@ -361,6 +380,11 @@ async fn start_recording(app: AppHandle, id: String, request_id: String) -> Resu
         progress("checking");
         let meeting = state.store.get(&id)?;
         let transcriber = transcriber(&app, &attempt, &mut progress)?;
+        if let Transcriber::Cloud(provider, _) = &transcriber {
+            if !provider.local {
+                state.store.update(&id, |m| m.mark_sent_to(&provider.name))?;
+            }
+        }
         attempt.check()?;
         progress("audio");
         let language = settings(&app).transcription_language;
@@ -506,12 +530,15 @@ async fn enhance(app: AppHandle, id: String) -> Result<meetings::Meeting, String
         let s = settings(&app);
         let (provider, model) = s.summarizer().ok_or("no API key")?;
         applog::info(&format!("summary with {} ({model})", provider.id));
-        let markdown = ai::enhance(&provider, &model, &meeting, &s.transcription_language, &mut |piece| {
+        let markdown = ai::enhance(&provider, &model, &meeting, &s.transcription_language, &s.summary_style, &mut |piece| {
             let _ = app.emit("enhance-delta", json!({ "id": id, "text": piece }));
         })
         .inspect_err(|e| applog::error(&format!("summary failed: {e}")))?;
         let title = ai::title_of(&markdown);
         state.store.update(&id, |m| {
+            if !provider.local {
+                m.mark_sent_to(&provider.name);
+            }
             m.enhanced = markdown.clone();
             if m.title.trim().is_empty() {
                 if let Some(title) = title {
@@ -621,6 +648,7 @@ fn main() {
             set_transcription_language,
             engine_status,
             install_engine,
+            search_meeting_ids,
             commands::help::diagnostics,
             commands::help::help_info,
             commands::help::open_data_folder,

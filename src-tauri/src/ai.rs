@@ -46,6 +46,19 @@ pub(crate) fn language_name(code: &str) -> &'static str {
     }
 }
 
+/// Extra guidance for each summary style; "general" adds none.
+pub(crate) fn style_instructions(style: &str) -> &'static str {
+    match style {
+        "sales" => "This is a sales or client call. Add sections for the client's needs and pains, objections, budget and timing when mentioned, and clear next steps with owners and dates.",
+        "one_on_one" => "This is a one-on-one. Add sections for how the person is doing, feedback given in both directions, growth or career topics, and agreed follow-ups.",
+        "standup" => "This is a daily stand-up. Keep it very short: per person when names are known, what was done, what is next and any blockers.",
+        "interview" => "This is an interview. Add sections for the candidate's background, strengths, concerns, answers to key questions and a neutral summary; do not make a hiring decision.",
+        _ => "",
+    }
+}
+
+pub(crate) const STYLES: [&str; 5] = ["general", "sales", "one_on_one", "standup", "interview"];
+
 pub(crate) fn prompt(meeting: &Meeting, language: &str) -> String {
     let transcript: Vec<String> = meeting
         .transcript
@@ -66,13 +79,18 @@ pub fn enhance(
     model: &str,
     meeting: &Meeting,
     language: &str,
+    style: &str,
     on_text: &mut dyn FnMut(&str),
 ) -> Result<String, String> {
     if model.trim().is_empty() {
         return Err("no model".into());
     }
     let key = providers::request_key(provider)?;
-    let input = prompt(meeting, language);
+    let mut input = prompt(meeting, language);
+    let extra = style_instructions(style);
+    if !extra.is_empty() {
+        input = format!("{input}\n\n{extra}");
+    }
     let (path, body) = match provider.api {
         Api::OpenAi => {
             let mut body = serde_json::json!({
@@ -262,6 +280,13 @@ data: {\"type\":\"message_stop\"}\n";
         assert_eq!(read_anthropic_stream(overloaded.as_bytes(), &mut |_| {}).unwrap_err(), "Overloaded");
         let refusal = "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"refusal\"}}\n";
         assert_eq!(read_anthropic_stream(refusal.as_bytes(), &mut |_| {}).unwrap_err(), "refusal");
+    }
+
+    #[test]
+    fn styles_add_their_own_guidance() {
+        assert_eq!(style_instructions("general"), "");
+        assert!(style_instructions("sales").contains("next steps"));
+        assert!(STYLES.iter().all(|s| *s == "general" || !style_instructions(s).is_empty()));
     }
 
     #[test]

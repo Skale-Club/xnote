@@ -120,7 +120,8 @@ function renderSidebar() {
   $('search').placeholder = t('search');
   $('open-settings').innerHTML = `${svg(ICONS.gear)}<span>${esc(t('settings'))}</span>`;
   const q = search.trim().toLowerCase();
-  const list = meetings.filter((m) => !q || (m.title || t('untitled')).toLowerCase().includes(q));
+  // Titles match at once; notes, summaries and transcripts when the search answers.
+  const list = meetings.filter((m) => !q || (m.title || t('untitled')).toLowerCase().includes(q) || searchIds?.has(m.id));
   if (!list.length) {
     $('list').innerHTML = `<div class="empty-list">${esc(t('noMeetings'))}</div>`;
     return;
@@ -155,19 +156,23 @@ function renderHead() {
     rec = `<button class="btn" disabled>${esc(label)}</button>`;
   } else {
     const label = meeting.transcript.length ? t('resume') : t('record');
-    rec = `<button class="btn ${meeting.transcript.length ? 'rec-outline' : 'rec'}" data-act="record"${busyElsewhere ? ' disabled' : ''}>${svg(ICONS.mic)}${esc(label)}</button>`;
+    rec = `<button class="btn ${meeting.transcript.length ? 'rec-outline' : 'rec'}" data-act="record" title="Ctrl+R"${busyElsewhere ? ' disabled' : ''}>${svg(ICONS.mic)}${esc(label)}</button>`;
   }
   const canEnhance = !here && !enhancing && (meeting.transcript.length || meeting.notes.trim());
   const meta = [dayLabel(meeting.created), timeOf(meeting.created), meeting.durationMs ? duration(meeting.durationMs) : ''].filter(Boolean).join(' · ');
+  const sent = meeting.sentTo || [];
+  const badge = sent.length
+    ? `<span class="badge cloud" title="${esc(t('badgeCloudTip'))}">${esc(t('badgeCloud', { names: sent.join(', ') }))}</span>`
+    : `<span class="badge local" title="${esc(t('badgeLocalTip'))}">${esc(t('badgeLocal'))}</span>`;
   el.innerHTML =
     `<div class="titles"><input id="title" class="title-input" value="${esc(meeting.title)}" placeholder="${esc(t('untitled'))}">` +
-    `<div class="meta">${esc(meta)}</div></div><div class="actions">${rec}` +
+    `<div class="meta">${esc(meta)} ${badge}</div></div><div class="actions">${rec}` +
     (engine?.summaryReady
       ? `<button class="btn primary" data-act="enhance"${canEnhance ? '' : ' disabled'}>${svg(ICONS.sparkle)}${esc(enhancing ? t('enhancing') : t('enhance'))}</button>`
       : `<button class="btn ghost" data-act="setup-summary" title="${esc(t('sumCloudDesc'))}">${svg(ICONS.sparkle)}${esc(t('setUpSummary'))}</button>`) +
-    `<button class="btn ghost" data-act="copy" title="${esc(t('copyMd'))}">${svg(ICONS.copy)}</button>` +
-    `<button class="btn ghost" data-act="export" title="${esc(t('export'))}">${svg(ICONS.download)}</button>` +
-    `<button class="btn ghost" data-act="delete" title="${esc(t('delete'))}"${here ? ' disabled' : ''}>${svg(ICONS.trash)}</button></div>`;
+    `<button class="btn ghost" data-act="copy" title="${esc(t('copyMd'))}" aria-label="${esc(t('copyMd'))}">${svg(ICONS.copy)}</button>` +
+    `<button class="btn ghost" data-act="export" title="${esc(t('export'))} (Ctrl+E)" aria-label="${esc(t('export'))}">${svg(ICONS.download)}</button>` +
+    `<button class="btn ghost" data-act="delete" title="${esc(t('delete'))}" aria-label="${esc(t('delete'))}"${here ? ' disabled' : ''}>${svg(ICONS.trash)}</button></div>`;
   $('title').addEventListener('change', (e) => saveTitle(e.target.value));
   tick();
 }
@@ -318,7 +323,7 @@ async function enhance() {
   renderNotesPane();
   try {
     const m = await invoke('enhance', { id });
-    if (meeting && meeting.id === id) { meeting.enhanced = m.enhanced; meeting.title = m.title; }
+    if (meeting && meeting.id === id) { meeting.enhanced = m.enhanced; meeting.title = m.title; meeting.sentTo = m.sentTo; }
   } catch (e) {
     toast(explain(e));
   }
@@ -379,7 +384,20 @@ function render() {
 $('new-meeting').addEventListener('click', newMeeting);
 $('open-settings').addEventListener('click', () => openSettings());
 $('skale').addEventListener('click', () => invoke('open_site'));
-$('search').addEventListener('input', (e) => { search = e.target.value; renderSidebar(); });
+let searchIds = null;
+let searchTimer = null;
+$('search').addEventListener('input', (e) => {
+  search = e.target.value;
+  searchIds = null;
+  renderSidebar();
+  clearTimeout(searchTimer);
+  const query = search.trim();
+  if (!query) return;
+  searchTimer = setTimeout(async () => {
+    const ids = await invoke('search_meeting_ids', { query }).catch(() => []);
+    if (search.trim() === query) { searchIds = new Set(ids); renderSidebar(); }
+  }, 250);
+});
 $('list').addEventListener('click', (e) => {
   const item = e.target.closest('[data-id]');
   if (item) open(item.dataset.id);
@@ -503,6 +521,25 @@ listen('engine-progress', ({ payload }) => {
 
 setInterval(tick, 500);
 
+// Keyboard: Ctrl+N new meeting, Ctrl+R record / stop, Ctrl+F search,
+// Ctrl+E export, Ctrl+, Settings.
+document.addEventListener('keydown', (e) => {
+  if (!e.ctrlKey || e.altKey || e.metaKey || !$('modal').hidden) return;
+  const key = e.key.toLowerCase();
+  const inMeeting = view === 'meeting' && meeting;
+  if (key === 'n') newMeeting();
+  else if (key === 'f') $('search').focus();
+  else if (key === ',') openSettings();
+  else if (key === 'r' && inMeeting) {
+    if (isRecordingHere() && recording.phase === 'recording') stopRecording();
+    else if (!recording) startRecording();
+  } else if (key === 'e' && inMeeting) {
+    invoke('save_export', { name: meeting.title || t('untitled'), markdown: markdownOf(meeting) })
+      .then((path) => toast(t('exported', { path })), (err) => toast(explain(err)));
+  } else return;
+  e.preventDefault();
+});
+
 // An AI assistant (MCP) may have saved a summary while the window was in the
 // background: show it when the window comes back.
 window.addEventListener?.('focus', async () => {
@@ -514,6 +551,7 @@ window.addEventListener?.('focus', async () => {
       if (fresh.enhanced !== meeting.enhanced || fresh.title !== meeting.title) {
         meeting.enhanced = fresh.enhanced;
         meeting.title = fresh.title;
+        meeting.sentTo = fresh.sentTo;
         renderMeeting();
       }
     } catch (_) { /* deleted or unreadable: the list shows it */ }

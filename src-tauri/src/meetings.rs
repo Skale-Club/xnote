@@ -28,6 +28,18 @@ pub struct Meeting {
     pub notes: String,
     pub enhanced: String,
     pub transcript: Vec<Line>,
+    /// Services that received this meeting's audio or text (e.g. "Groq"),
+    /// for the privacy badge. Empty: everything stayed on this computer.
+    pub sent_to: Vec<String>,
+}
+
+impl Meeting {
+    /// Notes that `name` received part of this meeting.
+    pub fn mark_sent_to(&mut self, name: &str) {
+        if !self.sent_to.iter().any(|n| n == name) {
+            self.sent_to.push(name.to_string());
+        }
+    }
 }
 
 #[derive(Serialize)]

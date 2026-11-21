@@ -32,6 +32,8 @@ pub struct Settings {
     /// AI assistants connected over MCP (`--mcp`) may save summaries into
     /// meetings. They can always read; they can never delete.
     pub assistants_can_write: bool,
+    /// "general", "sales", "one_on_one", "standup" or "interview".
+    pub summary_style: String,
 }
 
 impl Default for Settings {
@@ -49,6 +51,7 @@ impl Default for Settings {
             auto_summary: true,
             custom_providers: Vec::new(),
             assistants_can_write: true,
+            summary_style: "general".into(),
         }
     }
 }

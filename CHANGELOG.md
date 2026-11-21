@@ -21,6 +21,11 @@
   no meeting text) and Report a problem. A diagnostic log is kept in `Data/logs`.
 - Warnings when Xnote cannot save in its folder (for example under Program Files) and when neither
   the microphone nor the computer audio has made a sound for a minute while recording.
+- Each meeting shows where its data went: “Only on this PC” or “Sent to Groq, OpenAI…”.
+- Summary styles: general, sales or client call, one-on-one, daily stand-up, interview.
+- The sidebar search also finds text in notes, summaries and transcripts.
+- Keyboard shortcuts: Ctrl+N new meeting, Ctrl+R record / stop, Ctrl+F search, Ctrl+E export,
+  Ctrl+, Settings. Icon buttons have accessible names.
 - **Guided first run** in three steps, with a short step-by-step guide for each provider.
 - Settings: AI summary card and a Providers and keys card (add, test and remove keys; add
   compatible providers). The privacy note lists who receives audio or text.
