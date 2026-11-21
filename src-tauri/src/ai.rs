@@ -9,7 +9,7 @@ use crate::providers::{self, Api, Provider};
 use std::io::{BufRead, BufReader};
 use std::time::Duration;
 
-const SYSTEM: &str = "You write meeting notes. You get the user's own rough notes and a transcript of \
+pub(crate) const SYSTEM: &str = "You write meeting notes. You get the user's own rough notes and a transcript of \
 the meeting. Lines marked Me were said by the user; lines marked Them were said by the other \
 participants (their names are not known unless someone says them).
 
@@ -37,7 +37,7 @@ fn clock(ms: u64) -> String {
     }
 }
 
-fn language_name(code: &str) -> &'static str {
+pub(crate) fn language_name(code: &str) -> &'static str {
     match code {
         "pt" => "Brazilian Portuguese",
         "es" => "Spanish",
@@ -46,7 +46,7 @@ fn language_name(code: &str) -> &'static str {
     }
 }
 
-fn prompt(meeting: &Meeting, language: &str) -> String {
+pub(crate) fn prompt(meeting: &Meeting, language: &str) -> String {
     let transcript: Vec<String> = meeting
         .transcript
         .iter()

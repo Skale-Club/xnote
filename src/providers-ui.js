@@ -12,6 +12,8 @@ let sumChoice = null;       // { kind: off | local | cloud, provider, model, aut
 let install = null;         // { engine: {done,total}, model: {done,total}, error }
 let keyOpen = null;         // provider whose key field is open in the Providers card
 const modelLists = {};      // provider id → { state: loading | ok | error, list, error }
+let assistant = null;       // { exe, canWrite } for the AI assistants card
+let assistantClient = 'claude-desktop';
 
 const providerById = (id) => engine?.providers?.find((p) => p.id === id);
 const providerName = (id) => providerById(id)?.name || id;
@@ -407,7 +409,7 @@ function renderSettings() {
     `<button class="btn small" data-act="setup">${esc(t('change'))}</button></div></div>` +
     `<div class="card" id="summary-card"><h3>${esc(t('aiSummaryCard'))}</h3><p class="note">${esc(sumState)}</p>${summaryPicker()}` +
     `<div class="row"><button class="btn primary" data-act="save-summary">${esc(t('save'))}</button></div></div>` +
-    providersCard() +
+    providersCard() + assistantsCard() +
     `<div class="card"><h3>${esc(t('privacyCard'))}</h3><p class="note" style="margin:0">` +
     `${esc(cloud ? t('privacyCloud', { name: providerName(engine.provider) }) : t('privacy'))} ` +
     `${esc(names.length ? t('privacySent', { names: names.join(', ') }) : t('privacyAllLocal'))}</p></div></div>`;
@@ -437,6 +439,37 @@ async function addCustom(button) {
     toast(providerError(e));
   }
   renderSettings();
+}
+
+// ---------- AI assistants (MCP) ----------
+
+/** Configuration for each MCP client, with this exe's path. */
+function assistantSnippet(client, exe) {
+  const json = () => JSON.stringify({ mcpServers: { xnote: { command: exe, args: ['--mcp'] } } }, null, 2);
+  return {
+    'claude-desktop': [t('whereClaudeDesktop'), json()],
+    'claude-code': [t('whereClaudeCode'), `claude mcp add --scope user xnote -- "${exe}" --mcp`],
+    codex: [t('whereCodex'), `[mcp_servers.xnote]\ncommand = '${exe}'\nargs = ["--mcp"]`],
+    cursor: [t('whereCursor'), json()],
+    other: [t('whereOther'), `${exe} --mcp`],
+  }[client];
+}
+
+function assistantsCard() {
+  if (!assistant) {
+    invoke('assistant_info').then((info) => { assistant = info; if (view === 'settings') renderSettings(); });
+    return '';
+  }
+  const clients = [['claude-desktop', 'Claude Desktop'], ['claude-code', 'Claude Code'], ['codex', 'Codex'], ['cursor', 'Cursor'], ['other', 'Other / Outro']];
+  const opt = ([id, name]) => `<option value="${id}"${id === assistantClient ? ' selected' : ''}>${esc(name)}</option>`;
+  const [where, snippet] = assistantSnippet(assistantClient, assistant.exe);
+  return `<div class="card" id="assistants-card"><h3>${esc(t('assistantsCard'))}</h3><p class="note">${esc(t('assistantsText'))}</p>` +
+    `<div class="row"><span class="row-label">${esc(t('assistantsPick'))}</span><select id="assistant-client" class="field" aria-label="${esc(t('assistantsPick'))}">${clients.map(opt).join('')}</select></div>` +
+    `<p class="note">${esc(t('assistantsWhere'))}: ${esc(where)}</p>` +
+    `<div class="snippet"><pre>${esc(snippet)}</pre><button class="btn small" data-act="copy-code" data-code="${esc(snippet)}">${svg(ICONS.copy)}${esc(t('copy'))}</button></div>` +
+    `<p class="note">${esc(t('assistantsAsk'))}</p>` +
+    `<label class="check"><input type="checkbox" id="assistants-write"${assistant.canWrite ? ' checked' : ''}> ${esc(t('assistantsWrite'))}</label>` +
+    `<p class="note">${esc(t('assistantsPrivacy'))}</p><p class="note">${esc(t('chatgptNote'))}</p></div>`;
 }
 
 // ---------- events ----------
@@ -479,6 +512,11 @@ function handleProviderChange(e) {
   else if (el.name === 'sumkind') { sumChoice.kind = el.value; sumChoice.provider = ''; rerender(); }
   else if (el.id === 'sum-provider') { selectSumProvider(el.value); rerender(); }
   else if (el.id === 'sum-auto') sumChoice.auto = el.checked;
+  else if (el.id === 'assistant-client') { assistantClient = el.value; renderSettings(); }
+  else if (el.id === 'assistants-write') {
+    assistant.canWrite = el.checked;
+    invoke('set_assistants_can_write', { allowed: el.checked });
+  }
   else return false;
   return true;
 }

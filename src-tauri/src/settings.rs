@@ -29,6 +29,9 @@ pub struct Settings {
     pub auto_summary: bool,
     /// OpenAI-compatible addresses the user added.
     pub custom_providers: Vec<Custom>,
+    /// AI assistants connected over MCP (`--mcp`) may save summaries into
+    /// meetings. They can always read; they can never delete.
+    pub assistants_can_write: bool,
 }
 
 impl Default for Settings {
@@ -45,6 +48,7 @@ impl Default for Settings {
             summary_model: String::new(),
             auto_summary: true,
             custom_providers: Vec::new(),
+            assistants_can_write: true,
         }
     }
 }

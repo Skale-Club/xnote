@@ -88,7 +88,8 @@ impl Store {
     fn write(meeting: &Meeting) -> Result<(), String> {
         let path = Self::path(&meeting.id)?;
         fs::create_dir_all(Self::dir()).map_err(|e| e.to_string())?;
-        let tmp = path.with_extension("tmp");
+        // Per process: the window and the MCP server (`--mcp`) may both save.
+        let tmp = path.with_extension(format!("{}.tmp", std::process::id()));
         let text = serde_json::to_string_pretty(meeting).map_err(|e| e.to_string())?;
         fs::write(&tmp, text).map_err(|e| e.to_string())?;
         fs::rename(&tmp, &path).map_err(|e| e.to_string())

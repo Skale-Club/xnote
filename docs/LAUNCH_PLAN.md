@@ -12,6 +12,7 @@ Tamanho de cada tarefa: **P** (até meio dia) · **M** (1–2 dias) · **G** (3+
 | 0 | ✅ Feita (CI, CSP, MIT, arquivos de comunidade). A divisão do `main.rs` começou com `commands/providers.rs` e `settings.rs` |
 | 1 | ✅ Feita (provedores, adaptadores OpenAI-compatível e Anthropic, migração, testes) |
 | 2 | ✅ Feita (configuração guiada com tutorial por provedor, resumo opcional, cartão de Provedores). A divisão do `app.js` começou com `providers-ui.js` e `guides.js` |
+| MCP | ✅ Feito: assistentes de IA (Claude, Codex, Cursor) leem as reuniões e salvam resumos (`save_summary`, prompt `summarize_meeting`), cartão nas Configurações com a configuração de cada um. ChatGPT não se conecta a apps locais |
 | 3–5 | A fazer |
 
 Decisões tomadas: repositório público, licença MIT, resumo **opcional** e desligado por padrão

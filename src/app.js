@@ -470,6 +470,23 @@ listen('engine-progress', ({ payload }) => {
 
 setInterval(tick, 500);
 
+// An AI assistant (MCP) may have saved a summary while the window was in the
+// background: show it when the window comes back.
+window.addEventListener?.('focus', async () => {
+  if (recording || enhancing) return;
+  await refreshList().catch(() => {});
+  if (view === 'meeting' && meeting) {
+    try {
+      const fresh = await invoke('get_meeting', { id: meeting.id });
+      if (fresh.enhanced !== meeting.enhanced || fresh.title !== meeting.title) {
+        meeting.enhanced = fresh.enhanced;
+        meeting.title = fresh.title;
+        renderMeeting();
+      }
+    } catch (_) { /* deleted or unreadable: the list shows it */ }
+  }
+});
+
 (async () => {
   try {
     settings = await invoke('get_settings');

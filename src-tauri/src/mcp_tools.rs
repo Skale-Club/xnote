@@ -1,8 +1,9 @@
 //! What Xnote offers over MCP (`Xnote.exe --mcp`): reading the saved
-//! meetings and the transcription setup. Only reading: recording, editing
-//! and deleting stay in the window. API keys are never shown.
+//! meetings and the transcription setup, and saving a summary the assistant
+//! wrote (when Settings allow it). Recording, editing notes and deleting stay
+//! in the window. API keys are never shown.
 
-use crate::mcp::{self, Tool};
+use crate::mcp::{self, Prompt, Tool};
 use crate::meetings::{self, Meeting};
 use serde_json::{json, Value};
 
@@ -10,7 +11,60 @@ const INSTRUCTIONS: &str = "Xnote records meetings and keeps, for each one, the 
 transcript and the AI-enhanced notes, as files on this PC. list_meetings gives the meetings, newest \
 first; get_meeting gives one in full; search_meetings finds text in all of them. Times: created is Unix \
 milliseconds, transcript ms counts from the start of the meeting, who is \"me\" (microphone) or \"them\" \
-(computer audio). Nothing is changed.";
+(computer audio). To summarize a meeting: read it with get_meeting, write the notes following \
+save_summary's description, then save them with save_summary so they appear in Xnote (the \
+summarize_meeting prompt does all of this). Nothing is ever deleted.";
+
+/// Saves `markdown` as the meeting's enhanced notes; the "# Title" line
+/// names an untitled meeting. Checks afterwards that the window, which may be
+/// saving the same file, did not overwrite it.
+fn save_summary(store: &meetings::Store, id: &str, markdown: &str) -> Result<Value, String> {
+    if !crate::load_settings().assistants_can_write {
+        return Err(
+            "Saving summaries is turned off in Xnote (Settings → AI assistants). Show the summary to the user instead.".into()
+        );
+    }
+    let markdown = markdown.trim();
+    if markdown.is_empty() {
+        return Err("Missing \"markdown\".".into());
+    }
+    if markdown.len() > 200_000 {
+        return Err("The summary is too long.".into());
+    }
+    let title = crate::ai::title_of(markdown);
+    for _ in 0..3 {
+        let saved = store.update(id, |m| {
+            m.enhanced = markdown.to_string();
+            if m.title.trim().is_empty() {
+                if let Some(title) = &title {
+                    m.title = title.clone();
+                }
+            }
+        })?;
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        if store.get(id)?.enhanced == markdown {
+            return Ok(json!({ "saved": true, "id": saved.id, "title": saved.title }));
+        }
+    }
+    Err("The meeting is being saved by Xnote right now; try again in a moment.".into())
+}
+
+/// The summarize_meeting prompt: Xnote's own summary instructions plus the
+/// meeting, in the meeting language from Settings.
+fn summary_prompt(store: &meetings::Store, args: &Value) -> Result<Value, String> {
+    let meeting = store.get(&mcp::text(args, "id")?)?;
+    if meeting.transcript.is_empty() && meeting.notes.trim().is_empty() {
+        return Err("This meeting has no notes or transcript yet.".into());
+    }
+    let settings = crate::load_settings();
+    let language = mcp::optional_text(args, "language").unwrap_or(settings.transcription_language.clone());
+    let save = if settings.assistants_can_write {
+        format!("When the notes are ready, save them with the save_summary tool (id \"{}\") so they appear in Xnote, then show them to me.", meeting.id)
+    } else {
+        "Show the notes to me; saving into Xnote is turned off.".to_string()
+    };
+    Ok(json!([mcp::user_message(format!("{}\n\n{}\n\n{save}", crate::ai::SYSTEM, crate::ai::prompt(&meeting, &language)))]))
+}
 
 /// Around `at` in `text`, cut at character boundaries.
 fn snippet(text: &str, at: usize, length: usize) -> String {
@@ -51,8 +105,36 @@ fn hits(meeting: &Meeting, query: &str) -> Vec<Value> {
     found
 }
 
+/// The search_meetings tool.
+fn search(store: &meetings::Store, args: &Value) -> Result<Value, String> {
+    let query = mcp::text(args, "query")?;
+    let limit = mcp::number(args, "limit", 20) as usize;
+    let mut results = Vec::new();
+    for summary in store.list() {
+        let Ok(meeting) = store.get(&summary.id) else { continue };
+        let mut found = hits(&meeting, &query);
+        if found.is_empty() {
+            continue;
+        }
+        let total = found.len();
+        found.truncate(10);
+        results.push(json!({
+            "id": meeting.id,
+            "title": meeting.title,
+            "created": meeting.created,
+            "matches": total,
+            "passages": found,
+        }));
+        if results.len() == limit {
+            break;
+        }
+    }
+    Ok(json!(results))
+}
+
 pub fn serve() {
     let store = std::rc::Rc::new(meetings::Store::default());
+    let prompt_store = store.clone();
     let tools = vec![
         Tool::new(
             "list_meetings",
@@ -88,32 +170,31 @@ pub fn serve() {
                 },
                 "required": ["query"],
             }),
-            move |args| {
-                let query = mcp::text(args, "query")?;
-                let limit = mcp::number(args, "limit", 20) as usize;
-                let mut results = Vec::new();
-                for summary in store.list() {
-                    let Ok(meeting) = store.get(&summary.id) else { continue };
-                    let mut found = hits(&meeting, &query);
-                    if found.is_empty() {
-                        continue;
-                    }
-                    let total = found.len();
-                    found.truncate(10);
-                    results.push(json!({
-                        "id": meeting.id,
-                        "title": meeting.title,
-                        "created": meeting.created,
-                        "matches": total,
-                        "passages": found,
-                    }));
-                    if results.len() == limit {
-                        break;
-                    }
-                }
-                Ok(json!(results))
+            {
+                let store = store.clone();
+                move |args| search(&store, args)
             },
         ),
+        Tool::new(
+            "save_summary",
+            "Saves meeting notes you wrote as the meeting's enhanced notes in Xnote (replacing earlier ones). \
+             Write Markdown: '# A short title', a two or three sentence summary, then '## ' sections that fit \
+             (Key points, Decisions, Action items as '- [ ] task (owner)', Open questions). Keep every point \
+             of the user's own notes; never invent facts. An untitled meeting takes the title.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "id": { "type": "string", "description": "Meeting id from list_meetings." },
+                    "markdown": { "type": "string", "description": "The notes, in Markdown." },
+                },
+                "required": ["id", "markdown"],
+            }),
+            {
+                let store = store.clone();
+                move |args| save_summary(&store, &mcp::text(args, "id")?, &mcp::text(args, "markdown")?)
+            },
+        )
+        .changing(),
         Tool::new(
             "transcription_status",
             "How Xnote transcribes: local (whisper.cpp, with the installed builds and models and whether \
@@ -122,7 +203,16 @@ pub fn serve() {
             |_| Ok(json!(crate::engine_info_of(crate::load_settings()))),
         ),
     ];
-    mcp::serve("Xnote", "xnote.json", INSTRUCTIONS, tools);
+    let prompts = vec![Prompt::new(
+        "summarize_meeting",
+        "Turn a meeting's notes and transcript into clear notes with decisions and tasks, and save them in Xnote.",
+        vec![
+            ("id", "Meeting id (list_meetings gives them).", true),
+            ("language", "Language code for the notes (pt, en, es); default: the meeting language in Xnote.", false),
+        ],
+        move |args| summary_prompt(&prompt_store, args),
+    )];
+    mcp::serve_with_prompts("Xnote", "xnote.json", INSTRUCTIONS, tools, prompts);
 }
 
 #[cfg(test)]

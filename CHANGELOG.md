@@ -9,6 +9,11 @@
 - **AI summaries are optional.** Xnote records and transcribes with no API at all; a summary
   provider can be added at any time. Settings from earlier versions with an OpenAI key keep
   summarizing with OpenAI.
+- **AI assistants write summaries over MCP.** `save_summary` lets Claude, Codex, Cursor and other
+  MCP clients save the notes they write into a meeting (can be turned off; nothing is ever
+  deleted), and the `summarize_meeting` prompt gives them Xnote's summary instructions. Settings →
+  AI assistants shows the configuration for each client with the exe path. The window shows a
+  summary saved by an assistant when it comes back to the front.
 - **Guided first run** in three steps, with a short step-by-step guide for each provider.
 - Settings: AI summary card and a Providers and keys card (add, test and remove keys; add
   compatible providers). The privacy note lists who receives audio or text.

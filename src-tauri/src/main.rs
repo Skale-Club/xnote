@@ -544,6 +544,8 @@ fn main() {
             set_transcription_language,
             engine_status,
             install_engine,
+            commands::assistants::assistant_info,
+            commands::assistants::set_assistants_can_write,
             commands::providers::set_cloud_key,
             commands::providers::use_cloud,
             commands::providers::set_provider_key,

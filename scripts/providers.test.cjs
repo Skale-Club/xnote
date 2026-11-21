@@ -26,6 +26,7 @@ async function harness(engineOverrides = {}) {
     list_meetings: [],
     update_status: { current: '1.0.0', state: 'idle', version: null, notes: '', error: null, checkedAt: null },
     list_models: ['llama3.2', 'qwen3'],
+    assistant_info: { exe: 'C:\\Apps\\Xnote\\Xnote.exe', canWrite: true },
   };
   const invoke = async (command, args) => {
     calls.push({ command, args });
@@ -119,4 +120,17 @@ test('guides and setup texts have the same keys and placeholders in EN/PT/ES', a
   }
   // Every built-in provider has a guide.
   for (const p of PROVIDERS) assert.ok(guides.en[p.id], p.id);
+});
+
+test('Settings show how to connect AI assistants, with this exe in each snippet', async () => {
+  const h = await harness({ status: { gpu: true, packs: ['cuda'], models: ['best'] }, mode: 'local', pack: 'cuda', model: 'best' });
+  h.run("view = 'settings'; render()");
+  await flush(); await flush();
+  assert.match(h.html(), /AI assistants \(MCP\)/);
+  // JSON escapes the backslashes of the Windows path.
+  assert.match(h.html(), /&quot;command&quot;: &quot;C:\\\\Apps\\\\Xnote\\\\Xnote\.exe&quot;/);
+  h.change({ id: 'assistant-client', value: 'claude-code' });
+  assert.match(h.html(), /claude mcp add --scope user xnote -- &quot;C:\\Apps\\Xnote\\Xnote\.exe&quot; --mcp/);
+  h.change({ id: 'assistants-write', checked: false });
+  assert.deepEqual({ ...h.calls.find((c) => c.command === 'set_assistants_can_write').args }, { allowed: false });
 });

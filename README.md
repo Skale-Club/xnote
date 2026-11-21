@@ -88,18 +88,23 @@ does not count. Startup still allows up to three minutes, so slow storage or blo
 local connections can still cause a wait. The engine/model remain in the portable
 `Data/engine` folder; this change does not introduce an SSD model cache.
 
-## Use with Claude Code and Codex
+## Use with Claude, Codex, Cursor and other AI assistants
 
-`Xnote.exe --mcp` runs Xnote as a local [MCP](https://modelcontextprotocol.io) server, with no
-window, so AI assistants such as Claude Code and Codex can use its engine on this PC. Xnote itself
-sends nothing over the network; what the assistant reads goes to its AI provider, as with anything
-else you share with it. It only reads, and never returns API keys; connecting it lets the assistant
-read your meeting notes and transcripts.
+`Xnote.exe --mcp` runs Xnote as a local [MCP](https://modelcontextprotocol.io) server, with no window,
+so the AI assistant you already use can read your meetings and write summaries, without an API key
+in Xnote. The assistant starts it when needed; no network port is opened. **Settings → AI assistants**
+shows the configuration for each assistant, with your exe path, ready to copy.
 
-Claude Code (available in every project):
+Claude Code:
 
 ```bash
 claude mcp add --scope user xnote -- "C:\Apps\Xnote\Xnote.exe" --mcp
+```
+
+Claude Desktop (Settings → Developer → Edit Config) and Cursor (`%USERPROFILE%\.cursor\mcp.json`):
+
+```json
+{ "mcpServers": { "xnote": { "command": "C:\\Apps\\Xnote\\Xnote.exe", "args": ["--mcp"] } } }
 ```
 
 Codex, in `%USERPROFILE%\.codex\config.toml`:
@@ -110,15 +115,16 @@ command = 'C:\Apps\Xnote\Xnote.exe'
 args = ["--mcp"]
 ```
 
-Use the path where your `Xnote.exe` is. Tools:
+Then ask, for example, “Summarize my last meeting in Xnote”. Tools:
 
-- `app_info`: version, where the exe and `Data` folder are, and the saved settings.
-- `list_meetings`: saved meetings, newest first.
-- `get_meeting`: `id`: one meeting with notes, enhanced notes and transcript.
-- `search_meetings`: `query`, `limit`: finds text in every meeting and returns the matching
-  passages.
-- `transcription_status`: local or cloud transcription, installed engine and models, providers with
-  a key.
+- `list_meetings`, `get_meeting` (`id`), `search_meetings` (`query`, `limit`): read the meetings.
+- `save_summary` (`id`, `markdown`): saves the assistant's notes as the meeting's enhanced notes, so
+  they appear in Xnote. Can be turned off in Settings; nothing is ever deleted.
+- `app_info`, `transcription_status`: version, folders and setup (never API keys).
+- Prompt `summarize_meeting` (`id`): Xnote's own summary instructions plus the meeting.
+
+What the assistant reads goes to its AI provider, as with anything else you share with it. ChatGPT
+connects only to servers on the internet, not to apps on your PC, so it cannot use Xnote directly.
 
 ## Development
 
@@ -146,8 +152,8 @@ sua própria chave de API**.
   Credenciais do Windows. O app não salva áudio. Os arquivos de reunião não têm criptografia própria.
 - **Limites:** distingue “Você” de “Eles”, sem separar cada participante remoto. A transcrição
   pode atrasar. O Xnote se atualiza sozinho e instala a versão nova quando você o fecha.
-- **Claude Code e Codex:** `Xnote.exe --mcp` roda o Xnote como servidor MCP local, só leitura. Veja
-  [Use with Claude Code and Codex](#use-with-claude-code-and-codex).
+- **Claude Code e Codex:** `Xnote.exe --mcp` deixa o Claude, o Codex, o Cursor e outros assistentes lerem as reuniões e salvarem resumos, sem chave de API no Xnote. Veja
+  [Use with Claude, Codex, Cursor and other AI assistants](#use-with-claude-codex-cursor-and-other-ai-assistants).
 
 ## Español
 
@@ -169,8 +175,8 @@ ni suscripción: funciona **en tu equipo** o con **tu propia clave de API**.
   se guarda audio. Los archivos de reunión no tienen cifrado propio.
 - **Límites:** distingue “Tú” y “Ellos”, sin identificar a cada participante remoto. Puede haber
   retrasos. Xnote se actualiza solo e instala la versión nueva cuando lo cierras.
-- **Claude Code y Codex:** `Xnote.exe --mcp` ejecuta Xnote como servidor MCP local, solo lectura.
-  Consulta [Use with Claude Code and Codex](#use-with-claude-code-and-codex).
+- **Claude Code y Codex:** `Xnote.exe --mcp` deja que Claude, Codex, Cursor y otros asistentes lean las reuniones y guarden resúmenes, sin clave de API en Xnote.
+  Consulta [Use with Claude, Codex, Cursor and other AI assistants](#use-with-claude-codex-cursor-and-other-ai-assistants).
 
 ## Skale Club apps
 
