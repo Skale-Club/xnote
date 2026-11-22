@@ -44,7 +44,7 @@ async function harness(engineOverrides = {}) {
     document: { documentElement: {}, getElementById: node, querySelector: () => node('ver'), querySelectorAll: () => [], addEventListener() {}, removeEventListener() {} },
     window: { __TAURI__: { core: { invoke }, event: { listen: async () => () => {} }, app: { getVersion: async () => '1.0.0', getName: async () => 'Xnote' } } },
   });
-  for (const file of ['i18n.js', 'guides.js', 'updates.js', 'markdown.js', 'preparation.js', 'providers-ui.js', 'app.js']) {
+  for (const file of ['i18n.js', 'guides.js', 'updates.js', 'markdown.js', 'preparation.js', 'providers-ui.js', 'calendar.js', 'app.js']) {
     vm.runInContext(fs.readFileSync(path.join(src, file), 'utf8'), context);
   }
   await flush();
@@ -169,4 +169,53 @@ test('each meeting shows where its data went, and search also finds text inside 
   h.run("meetings = [{ id: '1', title: 'Budget', created: 0 }, { id: '2', title: 'Weekly', created: 0 }]; search = 'invoice'; searchIds = new Set(['2']); renderSidebar()");
   assert.match(h.node('list').innerHTML, /Weekly/);
   assert.doesNotMatch(h.node('list').innerHTML, /Budget/);
+});
+
+test('Settings change transcription in place, never on another page', async () => {
+  const h = await harness({ status: { gpu: true, packs: ['cuda'], models: ['best'] }, mode: 'local', pack: 'cuda', model: 'best' });
+  h.run("openSettings('transcription')");
+  assert.equal(h.run('view'), 'settings');
+  assert.match(h.html(), /In use: On this computer · NVIDIA graphics card · Best quality/);
+  // The options are right here, and the current one says it is in use.
+  assert.match(h.html(), /name="mode" value="local" checked/);
+  assert.match(h.html(), /<button class="btn primary" disabled>✓ In use<\/button>/);
+  assert.doesNotMatch(h.html(), /data-act="setup"/);
+  // Switching to the cloud stays in Settings and shows the provider and its key.
+  h.change({ name: 'mode', value: 'cloud' });
+  assert.equal(h.run('view'), 'settings');
+  assert.match(h.html(), /class="settings-nav"/);
+  assert.match(h.html(), /id="provider"/);
+  assert.match(h.html(), /id="key-groq"/);
+});
+
+test('using a cloud provider from Settings stays on the Transcription section', async () => {
+  const providers = PROVIDERS.map((p) => (p.id === 'groq' ? { ...p, hasKey: true, ready: true } : p));
+  const h = await harness({ status: { gpu: true, packs: ['cuda'], models: ['best'] }, mode: 'local', pack: 'cuda', model: 'best', providers });
+  h.run("openSettings('transcription')");
+  h.change({ name: 'mode', value: 'cloud' });
+  await h.act('use-cloud');
+  assert.ok(h.calls.find((c) => c.command === 'use_cloud'));
+  assert.equal(h.run('view'), 'settings');
+  assert.equal(h.run('settingsSection'), 'transcription');
+});
+
+test('Close and Esc leave Settings for the page that was open before', async () => {
+  const h = await harness({ status: { gpu: true, packs: ['cuda'], models: ['best'] }, mode: 'local', pack: 'cuda', model: 'best' });
+  h.run("meeting = { id: 'm1', title: 'Weekly', created: Date.now(), durationMs: 0, notes: '', transcript: [], enhanced: '', sentTo: [] }; view = 'meeting'");
+  h.run("openSettings('providers')");
+  assert.match(h.html(), /data-act="close-settings"/);
+  await h.act('close-settings');
+  assert.equal(h.run('view'), 'meeting');
+  h.run("meeting = null; view = 'welcome'; openSettings()");
+  await h.act('close-settings');
+  assert.equal(h.run('view'), 'welcome');
+});
+
+test('broken transcription opens Settings at Transcription, first run keeps the guide', async () => {
+  const h = await harness({ status: { gpu: true, packs: ['cuda'], models: [] }, mode: 'local', pack: 'cuda', model: 'best' });
+  assert.equal(h.run('view'), 'settings');
+  assert.equal(h.run('settingsSection'), 'transcription');
+  assert.match(h.html(), /Transcription is not working/);
+  const first = await harness();
+  assert.equal(first.run('view'), 'setup');
 });

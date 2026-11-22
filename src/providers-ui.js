@@ -14,7 +14,8 @@ let keyOpen = null;         // provider whose key field is open in the Providers
 const modelLists = {};      // provider id → { state: loading | ok | error, list, error }
 let assistant = null;       // { exe, canWrite } for the AI assistants card
 let assistantClient = 'claude-desktop';
-let settingsSection = 'general'; // general | transcription | summary | providers | assistants | privacy
+let settingsSection = 'general'; // general | transcription | summary | providers | assistants | privacy | help
+let settingsReturn = 'welcome';  // the page Close goes back to: welcome | meeting
 
 const providerById = (id) => engine?.providers?.find((p) => p.id === id);
 const providerName = (id) => providerById(id)?.name || id;
@@ -170,14 +171,18 @@ function localSetup() {
     (status.models.includes(setupChoice.model) ? 0 : SIZES_MB[setupChoice.model]);
   const label = need ? t('download', { size: `${need} MB` }) : t('useThis');
   const busy = install && !install.error;
-  return `<div class="card">${guideHtml('local')}<h3>${esc(t('engineCard'))}</h3>` +
+  const inUse = !need && engineReady() && engine.mode === 'local' && engine.pack === setupChoice.pack && engine.model === setupChoice.model;
+  const button = inUse
+    ? `<button class="btn primary" disabled>✓ ${esc(t('currentSetup'))}</button>`
+    : `<button class="btn primary" data-act="install"${busy ? ' disabled' : ''}>${esc(busy ? t('downloading') : label)}</button>`;
+  return `<div class="card">${need ? guideHtml('local') : ''}<h3>${esc(t('engineCard'))}</h3>` +
     choiceHtml('pack', 'cuda', t('gpuName'), t('gpuDesc'), { recommended: status.gpu, disabled: !status.gpu, disabledText: t('noGpu') }) +
     choiceHtml('pack', 'cpu', t('cpuName'), t('cpuDesc'), { recommended: !status.gpu }) +
     `<h3>${esc(t('modelCard'))}</h3>` +
     choiceHtml('model', 'best', t('bestName'), t('bestDesc'), { recommended: true }) +
     choiceHtml('model', 'light', t('lightName'), t('lightDesc')) +
     `<p class="note">${esc(t('localDownloadNote'))}</p></div>` +
-    `<div class="setup-actions"><button class="btn primary" data-act="install"${busy ? ' disabled' : ''}>${esc(busy ? t('downloading') : label)}</button></div>` +
+    `<div class="setup-actions">${button}</div>` +
     '<div class="progress" id="setup-progress"></div>';
 }
 
@@ -187,13 +192,17 @@ function cloudSetup() {
   const opt = (x) => `<option value="${esc(x.id)}"${x.id === p.id ? ' selected' : ''}>${esc(x.name)}${x.id === 'groq' ? ` (${esc(t('recommended').toLowerCase())})` : ''}</option>`;
   const desc = t(`${p.id}Desc`);
   const model = setupChoice.transcribeModel || p.transcribeModel;
+  const inUse = engineReady() && engine.mode === 'cloud' && engine.provider === p.id && model === (engine.transcriptionModel || p.transcribeModel);
+  const button = inUse
+    ? `<button class="btn primary" disabled>✓ ${esc(t('currentSetup'))}</button>`
+    : `<button class="btn primary" data-act="use-cloud"${p.ready ? '' : ' disabled'}>${esc(t('useProvider', { name: p.name }))}</button>`;
   return `<div class="card"><h3>${esc(t('providerCard'))}</h3>` +
     `<div class="row"><select id="provider" class="field" aria-label="${esc(t('providerCard'))}">${transcribers.map(opt).join('')}</select>${providerTags(p)}</div>` +
     (desc !== `${p.id}Desc` ? `<p class="note">${esc(desc)}</p>` : '') +
     guideFor(p) + keyHtml(p) +
     (p.ready ? modelHtml(p, model, 'transcribe-model', t('transcribeModel')) : '') +
     `<p class="note">${esc(t('cloudKeyNote', { name: p.name }))}</p></div>` +
-    `<div class="setup-actions"><button class="btn primary" data-act="use-cloud"${p.ready ? '' : ' disabled'}>${esc(t('useProvider', { name: p.name }))}</button></div>`;
+    `<div class="setup-actions">${button}</div>`;
 }
 
 function renderInstallProgress() {
@@ -211,7 +220,7 @@ function renderInstallProgress() {
 
 async function runInstall() {
   install = { engine: null, model: null, error: null };
-  renderSetup();
+  rerender();
   try {
     engine = await invoke('install_engine', { pack: setupChoice.pack, model: setupChoice.model });
     settings.pack = engine.pack;
@@ -220,7 +229,7 @@ async function runInstall() {
     transcriptionDone();
   } catch (e) {
     install.error = String(e);
-    renderSetup();
+    rerender();
   }
 }
 
@@ -234,21 +243,30 @@ async function useCloud(button) {
     transcriptionDone();
   } catch (e) {
     toast(providerError(e, providerById(id)));
-    renderSetup();
+    rerender();
   }
 }
 
-/** Transcription works: go on to the optional summary, or back to Settings. */
+/** Transcription works: on first run go on to the optional summary; in
+ * Settings stay on the same section, now showing the new choice in use. */
 function transcriptionDone() {
-  if (setupFlow === 'first') {
+  if (view === 'setup' && setupFlow === 'first') {
     setupStep = 2;
     sumChoice = null;
     renderSetup();
-  } else {
-    toast(t('setupDone'));
-    view = 'settings';
-    render();
+    return;
   }
+  toast(t('transcriptionSaved'));
+  setupChoice = null;
+  if (view !== 'settings') { settingsSection = 'transcription'; view = 'settings'; }
+  render();
+}
+
+/** Transcription is missing or stopped working: first run gets the guided
+ * setup, otherwise Settings opens at Transcription. */
+function needTranscription() {
+  if (engine?.mode) openSettings('transcription');
+  else openSetup('first');
 }
 
 // ---------- step 2: optional AI summary ----------
@@ -378,8 +396,9 @@ function providersCard() {
       (p.hasKey ? `<button class="btn ghost small danger-text" data-act="clear-provider-key" data-provider="${esc(p.id)}">${esc(t('remove'))}</button>` : '') +
       (p.custom ? `<button class="btn ghost small danger-text" data-act="remove-custom" data-provider="${esc(p.id)}" aria-label="${esc(t('delete'))}">${svg(ICONS.trash)}</button>` : '');
     const open = keyOpen === p.id ? `<div class="prov-key">${guideHtml(p.custom ? 'custom' : p.id)}${keyHtml(p)}</div>` : '';
-    return `<div class="prov"><div class="prov-row"><b>${esc(p.name)}</b>${providerTags(p)}<span class="caps">${caps}</span>` +
-      `<span class="prov-state">${state}</span><span class="prov-actions">${actions}</span></div>${open}</div>`;
+    // Left: who it is and what it does. Right: its state and buttons, always aligned.
+    return `<div class="prov"><div class="prov-row"><div class="prov-main"><b>${esc(p.name)}</b>${providerTags(p)}<span class="caps">${caps}</span></div>` +
+      `<div class="prov-side"><span class="prov-state">${state}</span><span class="prov-actions">${actions}</span></div></div>${open}</div>`;
   }).join('');
   const custom = `<details class="custom"><summary>${esc(t('addCustom'))}</summary>${guideHtml('custom')}` +
     `<div class="row"><input id="custom-name" class="field" placeholder="${esc(t('customName'))}" aria-label="${esc(t('customName'))}"></div>` +
@@ -410,8 +429,12 @@ function settingsBody(section) {
       : engine?.mode === 'local'
         ? [t('localName'), { cuda: t('gpuName'), cpu: t('cpuName') }[engine.pack], { best: t('bestName'), light: t('lightName') }[engine.model]]
         : ['—'];
-    return `<div class="card"><div class="row"><span class="row-label">${esc(t('currentSetup'))}</span><b>${esc(current.filter(Boolean).join(' · '))}</b>` +
-      `<button class="btn small" data-act="setup">${esc(t('change'))}</button></div></div>`;
+    // The choice is made right here: nothing opens another page.
+    if (!setupChoice) initSetupChoice();
+    const state = engineReady()
+      ? `<p class="status-line">${esc(t('currentSetup'))}: ${esc(current.filter(Boolean).join(' · '))}</p>`
+      : `<p class="status-line warn">${esc(t('transcriptionBroken'))}</p>`;
+    return state + transcriptionStep();
   }
   if (section === 'summary') {
     const sum = providerById(engine.summaryProvider);
@@ -433,9 +456,11 @@ function renderSettings() {
   const section = SETTINGS_SECTIONS.includes(settingsSection) ? settingsSection : 'general';
   const nav = SETTINGS_SECTIONS.map((id) =>
     `<button class="nav-item${id === section ? ' on' : ''}" data-section="${id}"${id === section ? ' aria-current="page"' : ''}>${esc(t(`nav_${id}`))}</button>`).join('');
-  viewEl.innerHTML = `<div class="page settings"><h1>${esc(t('settings'))}</h1>` +
+  viewEl.innerHTML = `<div class="page settings"><div class="settings-top"><h1>${esc(t('settings'))}</h1>` +
+    `<button class="btn ghost" data-act="close-settings" title="Esc">${svg(CAL_ICONS.close)}${esc(t('closeSettings'))}</button></div>` +
     `<div class="settings-grid"><nav class="settings-nav" aria-label="${esc(t('settings'))}">${nav}</nav>` +
     `<section class="settings-body"><h2>${esc(t(`nav_${section}`))}</h2><p class="lead">${esc(t(`desc_${section}`))}</p>${settingsBody(section)}</section></div></div>`;
+  renderInstallProgress();
   $('app-lang')?.addEventListener('change', (e) => {
     setLanguage(e.target.value);
     settings.language = language;
@@ -467,10 +492,18 @@ function helpCard() {
 
 /** Opens Settings at a section. */
 function openSettings(section = 'general') {
+  if (view !== 'settings') settingsReturn = view === 'meeting' && meeting ? 'meeting' : 'welcome';
   settingsSection = section;
   sumChoice = null;
+  if (!install) setupChoice = null;
   help = null;
   view = 'settings';
+  render();
+}
+
+/** Back to the meeting (or the start page) that was open before Settings. */
+function closeSettings() {
+  view = settingsReturn === 'meeting' && meeting ? 'meeting' : 'welcome';
   render();
 }
 
@@ -551,7 +584,8 @@ function handleProviderAct(act, el) {
     el.disabled = true;
     invoke('retry_pending_now').then((n) => { help = null; showPending(n); renderSettings(); });
   }
-  else if (act === 'setup') openSetup('change');
+  else if (act === 'setup') openSettings('transcription');
+  else if (act === 'close-settings') closeSettings();
   else if (act === 'setup-back') { setupStep = 1; renderSetup(); }
   else if (act === 'summary-next') saveSummary().then((ok) => { if (ok) { setupStep = 3; renderSetup(); } });
   else if (act === 'save-summary') saveSummary().then((ok) => { if (ok) { toast(t('save') + ' ✓'); sumChoice = null; renderSettings(); } });
@@ -567,8 +601,8 @@ function handleProviderAct(act, el) {
 /** Changes in provider pieces; true when handled. */
 function handleProviderChange(e) {
   const el = e.target;
-  if (['mode', 'pack', 'model'].includes(el.name)) { setupChoice[el.name] = el.value; renderSetup(); }
-  else if (el.id === 'provider') { setupChoice.provider = el.value; setupChoice.transcribeModel = ''; renderSetup(); }
+  if (['mode', 'pack', 'model'].includes(el.name)) { setupChoice[el.name] = el.value; rerender(); }
+  else if (el.id === 'provider') { setupChoice.provider = el.value; setupChoice.transcribeModel = ''; rerender(); }
   else if (el.name === 'sumkind') { sumChoice.kind = el.value; sumChoice.provider = ''; rerender(); }
   else if (el.id === 'sum-provider') { selectSumProvider(el.value); rerender(); }
   else if (el.id === 'sum-auto') sumChoice.auto = el.checked;

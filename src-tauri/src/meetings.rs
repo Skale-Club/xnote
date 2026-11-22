@@ -175,9 +175,29 @@ impl Store {
     }
 }
 
+/// A meeting date chosen by the user: from 2000 up to a year from now (a date
+/// can be set ahead for a meeting that is planned). Milliseconds since 1970.
+pub fn check_created(ms: u64) -> Result<u64, String> {
+    const YEAR_2000: u64 = 946_684_800_000;
+    const ONE_YEAR: u64 = 366 * 24 * 60 * 60 * 1000;
+    if ms < YEAR_2000 || ms > now_ms() + ONE_YEAR {
+        return Err("invalid date".into());
+    }
+    Ok(ms)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::Store;
+    use super::{check_created, now_ms, Store};
+
+    #[test]
+    fn a_meeting_date_must_be_plausible() {
+        assert!(check_created(0).is_err());
+        assert!(check_created(946_684_799_999).is_err());
+        assert_eq!(check_created(1_795_300_000_000), Ok(1_795_300_000_000));
+        assert!(check_created(now_ms() + 30 * 24 * 60 * 60 * 1000).is_ok());
+        assert!(check_created(now_ms() + 400 * 24 * 60 * 60 * 1000).is_err());
+    }
 
     #[test]
     fn rejects_ids_that_could_escape_the_folder() {

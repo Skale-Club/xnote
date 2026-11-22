@@ -14,7 +14,7 @@ async function harness(fullApp=false){
   vm.runInContext(fs.readFileSync(path.join(src,'i18n.js'),'utf8'),context);
   if(fullApp)vm.runInContext(fs.readFileSync(path.join(src,'guides.js'),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(src,'preparation.js'),'utf8'),context);
-  if(fullApp){vm.runInContext(fs.readFileSync(path.join(src,'updates.js'),'utf8'),context);vm.runInContext(fs.readFileSync(path.join(src,'providers-ui.js'),'utf8'),context);vm.runInContext(fs.readFileSync(path.join(src,'app.js'),'utf8'),context);await flush();vm.runInContext("meeting={id:'meeting-a',title:'Original meeting',durationMs:0,transcript:[],notes:'keep my notes'};view='meeting'",context);}
+  if(fullApp){vm.runInContext(fs.readFileSync(path.join(src,'updates.js'),'utf8'),context);vm.runInContext(fs.readFileSync(path.join(src,'providers-ui.js'),'utf8'),context);vm.runInContext(fs.readFileSync(path.join(src,'calendar.js'),'utf8'),context);vm.runInContext(fs.readFileSync(path.join(src,'app.js'),'utf8'),context);await flush();vm.runInContext("meeting={id:'meeting-a',title:'Original meeting',durationMs:0,transcript:[],notes:'keep my notes'};view='meeting'",context);}
   const api=context.window.XnotePreparation;
   const options={requestId:'one',id:'meeting-a',title:'Meeting <script>',mode:'local',onCancel:async()=>true,onRetry:()=>{}};
   const click=(action)=>node('preparation').onclick({target:{closest:()=>({dataset:{prep:action},disabled:false})}});

@@ -1,7 +1,15 @@
 # Changelog
 
-## 1.0.0 — first public release (date set when tagged)
+## 1.0.0 — 2026-11-21, first public release
 
+- **Calendar in the sidebar.** Days with meetings get dots; one click shows only that day's
+  meetings, the arrows change month and the calendar folds to one line (remembered).
+- **Change a meeting's date and time** by clicking it under the title, for meetings recorded
+  earlier or planned ahead. The list and the calendar follow.
+- Settings are easier to use: transcription is chosen right inside Settings → Transcription (no
+  separate page), Settings has a Close button (and Esc), and provider rows line up at any width.
+- The meeting header no longer squeezes the title in a narrow window: the buttons move to a second
+  line. The start page explains that speech is transcribed on this computer.
 - **Any large AI provider, with your own key or your own computer.** Transcription: on this
   computer (whisper.cpp), Groq, OpenAI or any OpenAI-compatible address. Summaries: Groq, OpenAI,
   OpenRouter, Anthropic (Claude), Google Gemini, Mistral, DeepSeek, Ollama, LM Studio or any

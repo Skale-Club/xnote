@@ -37,6 +37,7 @@ let notesTab = 'mine';
 let enhancing = null;       // { id, text } while notes stream in
 let search = '';
 let saveTimer = null;
+let editingDate = false;     // the date and time under the title is being changed
 
 // ---------- helpers ----------
 
@@ -109,6 +110,7 @@ function explain(error) {
   if (e === 'no API key') return t('needKey');
   if (e === 'no model') return t('noModel');
   if (e === 'not running') return t('notRunning', { name: providerName(engine?.summaryProvider) });
+  if (e === 'invalid date') return t('dateInvalid');
   return t('failed', { error: e });
 }
 
@@ -119,17 +121,22 @@ function renderSidebar() {
   $('new-meeting').innerHTML = `${svg(ICONS.plus)}<span>${esc(t('newMeeting'))}</span>`;
   $('search').placeholder = t('search');
   $('open-settings').innerHTML = `${svg(ICONS.gear)}<span>${esc(t('settings'))}</span>`;
+  renderCalendar();
   const q = search.trim().toLowerCase();
   // Titles match at once; notes, summaries and transcripts when the search answers.
-  const list = meetings.filter((m) => !q || (m.title || t('untitled')).toLowerCase().includes(q) || searchIds?.has(m.id));
+  // The day chosen in the calendar narrows the list further.
+  const list = meetings.filter((m) => calendarFilter(m) && (!q || (m.title || t('untitled')).toLowerCase().includes(q) || searchIds?.has(m.id)));
+  const chip = calendarChipHtml();
   if (!list.length) {
-    $('list').innerHTML = `<div class="empty-list">${esc(t('noMeetings'))}</div>`;
+    $('list').innerHTML = `${chip}<div class="empty-list">${esc(t(chip ? 'calNone' : 'noMeetings'))}</div>`;
     return;
   }
-  let html = '', lastDay = '';
+  let html = chip, lastDay = '';
   for (const m of list) {
     const day = dayLabel(m.created);
-    if (day !== lastDay) { html += `<div class="day silk">${esc(day)}</div>`; lastDay = day; }
+    // With a day chosen in the calendar, its chip already names the day.
+    if (day !== lastDay && !chip) html += `<div class="day silk">${esc(day)}</div>`;
+    lastDay = day;
     const dot = recording && recording.id === m.id ? '<span class="rec-dot"></span>' : '';
     const meta = [timeOf(m.created), m.durationMs ? duration(m.durationMs) : ''].filter(Boolean).join(' · ');
     const title = m.broken ? t('unreadable') : m.title || t('untitled');
@@ -159,14 +166,19 @@ function renderHead() {
     rec = `<button class="btn ${meeting.transcript.length ? 'rec-outline' : 'rec'}" data-act="record" title="Ctrl+R"${busyElsewhere ? ' disabled' : ''}>${svg(ICONS.mic)}${esc(label)}</button>`;
   }
   const canEnhance = !here && !enhancing && (meeting.transcript.length || meeting.notes.trim());
-  const meta = [dayLabel(meeting.created), timeOf(meeting.created), meeting.durationMs ? duration(meeting.durationMs) : ''].filter(Boolean).join(' · ');
+  const when = `${dayLabel(meeting.created)} · ${timeOf(meeting.created)}`;
+  const length = meeting.durationMs ? ` · ${esc(duration(meeting.durationMs))}` : '';
   const sent = meeting.sentTo || [];
   const badge = sent.length
     ? `<span class="badge cloud" title="${esc(t('badgeCloudTip'))}">${esc(t('badgeCloud', { names: sent.join(', ') }))}</span>`
     : `<span class="badge local" title="${esc(t('badgeLocalTip'))}">${esc(t('badgeLocal'))}</span>`;
   el.innerHTML =
     `<div class="titles"><input id="title" class="title-input" value="${esc(meeting.title)}" placeholder="${esc(t('untitled'))}">` +
-    `<div class="meta">${esc(meta)} ${badge}</div></div><div class="actions">${rec}` +
+    (editingDate && !here
+      ? `<div class="meta editing"><input type="datetime-local" id="date-input" class="date-input" value="${localInputValue(meeting.created)}" aria-label="${esc(t('changeDate'))}">` +
+        `<button class="btn small primary" data-act="date-save">${esc(t('save'))}</button><button class="btn small ghost" data-act="date-cancel">${esc(t('cancel'))}</button></div></div>`
+      : `<div class="meta"><button class="meta-date" data-act="edit-date" title="${esc(t(here ? 'dateRecording' : 'changeDate'))}"${here ? ' disabled' : ''}>${esc(when)}</button>${length} ${badge}</div></div>`) +
+    `<div class="actions">${rec}` +
     (engine?.summaryReady
       ? `<button class="btn primary" data-act="enhance"${canEnhance ? '' : ' disabled'}>${svg(ICONS.sparkle)}${esc(enhancing ? t('enhancing') : t('enhance'))}</button>`
       : `<button class="btn ghost" data-act="setup-summary" title="${esc(t('sumCloudDesc'))}">${svg(ICONS.sparkle)}${esc(t('setUpSummary'))}</button>`) +
@@ -174,6 +186,7 @@ function renderHead() {
     `<button class="btn ghost" data-act="export" title="${esc(t('export'))} (Ctrl+E)" aria-label="${esc(t('export'))}">${svg(ICONS.download)}</button>` +
     `<button class="btn ghost" data-act="delete" title="${esc(t('delete'))}" aria-label="${esc(t('delete'))}"${here ? ' disabled' : ''}>${svg(ICONS.trash)}</button></div>`;
   $('title').addEventListener('change', (e) => saveTitle(e.target.value));
+  if (editingDate && !here) $('date-input')?.focus();
   tick();
 }
 
@@ -238,6 +251,32 @@ function scheduleNotesSave(value) {
   saveTimer = setTimeout(() => invoke('update_meeting', { id, notes: value }).catch((e) => toast(explain(e))), 600);
 }
 
+/** A timestamp as the value of a datetime-local input, in local time. */
+function localInputValue(ts) {
+  const d = new Date(ts), two = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}T${two(d.getHours())}:${two(d.getMinutes())}`;
+}
+
+/** Moves the meeting to the date and time typed under the title. */
+async function saveDate() {
+  const value = $('date-input')?.value || '';
+  const created = new Date(value).getTime();
+  if (!value || Number.isNaN(created)) { toast(t('dateInvalid')); return; }
+  const id = meeting.id;
+  try {
+    const m = await invoke('update_meeting', { id, created });
+    if (meeting && meeting.id === id) meeting.created = m.created;
+    editingDate = false;
+    // The list follows the meeting when a day is chosen in the calendar.
+    if (calDay) setCalendarDay(dayKey(m.created));
+    toast(t('dateChanged', { date: `${dayLabel(m.created)} · ${timeOf(m.created)}` }));
+    await refreshList();
+    renderHead();
+  } catch (e) {
+    toast(String(e) === 'recording' ? t('dateRecording') : explain(e));
+  }
+}
+
 async function saveTitle(value) {
   meeting.title = value.trim();
   await invoke('update_meeting', { id: meeting.id, title: meeting.title });
@@ -248,9 +287,10 @@ async function saveTitle(value) {
 
 async function newMeeting() {
   const m = await invoke('create_meeting');
+  resetCalendar();
   await refreshList();
   await open(m.id);
-  if (!engineReady()) openSetup(engine?.mode ? 'change' : 'first');
+  if (!engineReady()) needTranscription();
 }
 
 async function open(id) {
@@ -261,13 +301,14 @@ async function open(id) {
     return;
   }
   view = 'meeting';
+  editingDate = false;
   notesTab = meeting.enhanced ? 'enhanced' : 'mine';
   render();
 }
 
 async function startRecording() {
   if (recording) return;
-  if (!engineReady()) { openSetup(engine?.mode ? 'change' : 'first'); return; }
+  if (!engineReady()) { needTranscription(); return; }
   const target = meeting;
   const requestId = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   startupRequestId = requestId;
@@ -288,7 +329,7 @@ async function startRecording() {
     if (startupRequestId !== requestId) return;
     recording = null; engineLoading = false;
     if (String(e) === 'startup_cancelled') window.XnotePreparation.close();
-    else if (String(e) === 'engine') { window.XnotePreparation.close(); openSetup('change'); return; }
+    else if (String(e) === 'engine') { window.XnotePreparation.close(); needTranscription(); return; }
     else window.XnotePreparation.fail(requestId, String(e));
     renderHead(); renderSidebar();
   }
@@ -398,12 +439,19 @@ $('search').addEventListener('input', (e) => {
     if (search.trim() === query) { searchIds = new Set(ids); renderSidebar(); }
   }, 250);
 });
+$('calendar').addEventListener('click', handleCalendarClick);
 $('list').addEventListener('click', (e) => {
+  if (handleCalendarClick(e)) return;
   const item = e.target.closest('[data-id]');
   if (item) open(item.dataset.id);
 });
 
 viewEl.addEventListener('change', handleProviderChange);
+viewEl.addEventListener('keydown', (e) => {
+  if (e.target.id !== 'date-input') return;
+  if (e.key === 'Enter') { e.preventDefault(); saveDate(); }
+  else if (e.key === 'Escape') { editingDate = false; renderHead(); }
+});
 viewEl.addEventListener('input', handleProviderInput);
 
 viewEl.addEventListener('click', (e) => {
@@ -418,6 +466,9 @@ viewEl.addEventListener('click', (e) => {
   else if (act === 'record') startRecording();
   else if (act === 'stop') stopRecording();
   else if (act === 'enhance') enhance();
+  else if (act === 'edit-date') { editingDate = true; renderHead(); }
+  else if (act === 'date-save') saveDate();
+  else if (act === 'date-cancel') { editingDate = false; renderHead(); }
   else if (act === 'copy') navigator.clipboard.writeText(markdownOf(meeting)).then(() => toast(t('copied')));
   else if (act === 'export') {
     invoke('save_export', { name: meeting.title || t('untitled'), markdown: markdownOf(meeting) })
@@ -524,6 +575,11 @@ setInterval(tick, 500);
 // Keyboard: Ctrl+N new meeting, Ctrl+R record / stop, Ctrl+F search,
 // Ctrl+E export, Ctrl+, Settings.
 document.addEventListener('keydown', (e) => {
+  // Esc leaves Settings, unless it is closing a field's own popup.
+  if (e.key === 'Escape' && view === 'settings' && $('modal').hidden && !e.target?.closest?.('input, select, textarea')) {
+    closeSettings();
+    return;
+  }
   if (!e.ctrlKey || e.altKey || e.metaKey || !$('modal').hidden) return;
   const key = e.key.toLowerCase();
   const inMeeting = view === 'meeting' && meeting;
@@ -565,5 +621,5 @@ window.addEventListener?.('focus', async () => {
   setLanguage(settings.language);
   [engine, meetings] = await Promise.all([invoke('engine_status'), invoke('list_meetings')]);
   invoke('help_info').then((info) => { notWritable = !!info && !info.writable; showPending(info?.pending || 0); }).catch(() => {});
-  if (engineReady()) { view = 'welcome'; render(); } else openSetup(engine.mode ? 'change' : 'first');
+  if (engineReady()) { view = 'welcome'; render(); } else needTranscription();
 })();

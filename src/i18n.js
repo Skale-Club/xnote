@@ -4,6 +4,7 @@
 const I18N = {
   en: {
     locale: 'en-US',
+    weekStart: 0,
     ui: {
       prepTitle: "Preparing recording",
       prepNotRecording: "Recording has not started yet. You can keep writing your notes.",
@@ -32,7 +33,11 @@ const I18N = {
       unreadable: 'Meeting that can’t be opened', unreadableNote: 'This meeting file can’t be read. It is still in Data\\meetings. ({error})',
       welcomeTitle: 'Your meetings, written up for you',
       welcomeText: 'Start a meeting, jot down what matters, and Xnote fills in the rest from the transcript.',
-      welcomeLocal: 'Audio stays on this computer.',
+      welcomeLocal: 'Speech is transcribed right here on this computer, so the audio never leaves it.',
+      calHide: 'Hide calendar', calShow: 'Show calendar', calPrev: 'Previous month', calNext: 'Next month',
+      changeDate: 'Change date and time', dateChanged: 'Moved to {date}', dateInvalid: 'Choose a date from 2000 up to a year from now.', dateRecording: 'The date can’t change while this meeting records.',
+      closeSettings: 'Close', transcriptionSaved: 'Transcription updated.', transcriptionBroken: 'Transcription is not working. Choose how to transcribe below.',
+      calAll: 'Show all', calOne: '1 meeting', calMany: '{n} meetings', calNone: 'No meetings on this day.',
       record: 'Start recording', resume: 'Resume recording', stop: 'Stop', finishing: 'Finishing…', loadingEngine: 'Loading model…',
       enhance: 'Enhance notes', enhancing: 'Writing notes…', regenerate: 'Regenerate',
       myNotes: 'My notes', enhanced: 'Enhanced', transcript: 'Transcript',
@@ -77,6 +82,7 @@ const I18N = {
   },
   pt: {
     locale: 'pt-BR',
+    weekStart: 0,
     ui: {
       prepTitle: "Preparando gravação",
       prepNotRecording: "A gravação ainda não começou. Você pode continuar escrevendo suas notas.",
@@ -105,7 +111,11 @@ const I18N = {
       unreadable: 'Reunião que não abre', unreadableNote: 'Não foi possível ler o arquivo desta reunião. Ele continua em Data\\meetings. ({error})',
       welcomeTitle: 'Suas reuniões, organizadas para você',
       welcomeText: 'Comece uma reunião, anote o que importa e o Xnote completa o resto a partir da transcrição.',
-      welcomeLocal: 'O áudio fica neste computador.',
+      welcomeLocal: 'A fala é transcrita aqui mesmo, neste computador, então o áudio não sai dele.',
+      calHide: 'Esconder calendário', calShow: 'Mostrar calendário', calPrev: 'Mês anterior', calNext: 'Próximo mês',
+      changeDate: 'Mudar data e hora', dateChanged: 'Movida para {date}', dateInvalid: 'Escolha uma data entre 2000 e daqui a um ano.', dateRecording: 'A data não muda enquanto esta reunião grava.',
+      closeSettings: 'Fechar', transcriptionSaved: 'Transcrição atualizada.', transcriptionBroken: 'A transcrição não está funcionando. Escolha abaixo como transcrever.',
+      calAll: 'Mostrar todas', calOne: '1 reunião', calMany: '{n} reuniões', calNone: 'Nenhuma reunião neste dia.',
       record: 'Gravar', resume: 'Continuar gravando', stop: 'Parar', finishing: 'Finalizando…', loadingEngine: 'Carregando modelo…',
       enhance: 'Melhorar notas', enhancing: 'Escrevendo notas…', regenerate: 'Gerar de novo',
       myNotes: 'Minhas notas', enhanced: 'Melhoradas', transcript: 'Transcrição',
@@ -150,6 +160,7 @@ const I18N = {
   },
   es: {
     locale: 'es-ES',
+    weekStart: 1,
     ui: {
       prepTitle: "Preparando grabación",
       prepNotRecording: "La grabación aún no ha comenzado. Puedes seguir escribiendo tus notas.",
@@ -178,7 +189,11 @@ const I18N = {
       unreadable: 'Reunión que no se puede abrir', unreadableNote: 'No se pudo leer el archivo de esta reunión. Sigue en Data\\meetings. ({error})',
       welcomeTitle: 'Tus reuniones, organizadas para ti',
       welcomeText: 'Empieza una reunión, apunta lo importante y Xnote completa el resto a partir de la transcripción.',
-      welcomeLocal: 'El audio se queda en este equipo.',
+      welcomeLocal: 'La voz se transcribe aquí mismo, en este equipo, así que el audio no sale de él.',
+      calHide: 'Ocultar calendario', calShow: 'Mostrar calendario', calPrev: 'Mes anterior', calNext: 'Mes siguiente',
+      changeDate: 'Cambiar fecha y hora', dateChanged: 'Movida a {date}', dateInvalid: 'Elige una fecha entre 2000 y dentro de un año.', dateRecording: 'La fecha no cambia mientras esta reunión graba.',
+      closeSettings: 'Cerrar', transcriptionSaved: 'Transcripción actualizada.', transcriptionBroken: 'La transcripción no funciona. Elige abajo cómo transcribir.',
+      calAll: 'Mostrar todas', calOne: '1 reunión', calMany: '{n} reuniones', calNone: 'No hay reuniones este día.',
       record: 'Grabar', resume: 'Seguir grabando', stop: 'Detener', finishing: 'Finalizando…', loadingEngine: 'Cargando modelo…',
       enhance: 'Mejorar notas', enhancing: 'Escribiendo notas…', regenerate: 'Regenerar',
       myNotes: 'Mis notas', enhanced: 'Mejoradas', transcript: 'Transcripción',

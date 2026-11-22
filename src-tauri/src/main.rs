@@ -339,8 +339,17 @@ fn update_meeting(
     id: String,
     title: Option<String>,
     notes: Option<String>,
+    created: Option<u64>,
 ) -> Result<meetings::Meeting, String> {
+    // A new date and time chosen by the user; not while that meeting records.
+    let created = created.map(meetings::check_created).transpose()?;
+    if created.is_some() && state.session.lock().unwrap().as_ref().is_some_and(|s| s.id == id) {
+        return Err("recording".into());
+    }
     state.store.update(&id, |m| {
+        if let Some(created) = created {
+            m.created = created;
+        }
         if let Some(title) = title {
             m.title = title;
         }
