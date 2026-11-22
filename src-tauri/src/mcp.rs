@@ -39,6 +39,32 @@ impl Tool {
     }
 }
 
+/// A ready-made request the user can pick in the client (a slash command in
+/// many of them). `get` returns the prompt's messages for the given arguments.
+pub struct Prompt {
+    pub name: &'static str,
+    pub description: &'static str,
+    /// (name, description, required)
+    pub arguments: Vec<(&'static str, &'static str, bool)>,
+    pub get: Box<dyn Fn(&Value) -> Result<Value, String>>,
+}
+
+impl Prompt {
+    pub fn new(
+        name: &'static str,
+        description: &'static str,
+        arguments: Vec<(&'static str, &'static str, bool)>,
+        get: impl Fn(&Value) -> Result<Value, String> + 'static,
+    ) -> Self {
+        Self { name, description, arguments, get: Box::new(get) }
+    }
+}
+
+/// One user message with text, for a prompt's result.
+pub fn user_message(text: String) -> Value {
+    json!({ "role": "user", "content": { "type": "text", "text": text } })
+}
+
 /// No arguments.
 pub fn no_input() -> Value {
     json!({ "type": "object", "properties": {} })
@@ -96,7 +122,18 @@ fn app_info(name: &str, settings_file: &str) -> Value {
 }
 
 /// Answers requests until the client closes stdin.
-pub fn serve(name: &'static str, settings_file: &'static str, instructions: &str, mut tools: Vec<Tool>) {
+pub fn serve(name: &'static str, settings_file: &'static str, instructions: &str, tools: Vec<Tool>) {
+    serve_with_prompts(name, settings_file, instructions, tools, Vec::new())
+}
+
+/// Like `serve`, with prompts as well.
+pub fn serve_with_prompts(
+    name: &'static str,
+    settings_file: &'static str,
+    instructions: &str,
+    mut tools: Vec<Tool>,
+    prompts: Vec<Prompt>,
+) {
     tools.insert(
         0,
         Tool::new(
@@ -114,7 +151,7 @@ pub fn serve(name: &'static str, settings_file: &'static str, instructions: &str
             continue;
         }
         let reply = match serde_json::from_str::<Value>(&line) {
-            Ok(message) => handle(&message, name, instructions, &tools),
+            Ok(message) => handle(&message, name, instructions, &tools, &prompts),
             Err(e) => Some(error(Value::Null, -32700, &format!("Parse error: {e}"))),
         };
         if let Some(reply) = reply {
@@ -130,16 +167,17 @@ fn error(id: Value, code: i64, message: &str) -> Value {
 }
 
 /// The reply to one message; None for notifications.
-fn handle(message: &Value, name: &str, instructions: &str, tools: &[Tool]) -> Option<Value> {
+fn handle(message: &Value, name: &str, instructions: &str, tools: &[Tool], prompts: &[Prompt]) -> Option<Value> {
     let id = message.get("id")?.clone();
     let params = message.get("params").cloned().unwrap_or(Value::Null);
     let result = match message.get("method").and_then(Value::as_str).unwrap_or("") {
         "initialize" => {
             let asked = params.get("protocolVersion").and_then(Value::as_str).unwrap_or("");
             let version = PROTOCOLS.iter().find(|v| **v == asked).unwrap_or(&PROTOCOLS[0]);
+            let capabilities = if prompts.is_empty() { json!({ "tools": {} }) } else { json!({ "tools": {}, "prompts": {} }) };
             json!({
                 "protocolVersion": version,
-                "capabilities": { "tools": {} },
+                "capabilities": capabilities,
                 "serverInfo": { "name": name.to_lowercase(), "title": name, "version": env!("CARGO_PKG_VERSION") },
                 "instructions": instructions,
             })
@@ -168,6 +206,26 @@ fn handle(message: &Value, name: &str, instructions: &str, tools: &[Tool]) -> Op
                 Err(message) => json!({ "content": [{ "type": "text", "text": message }], "isError": true }),
             }
         }
+        "prompts/list" => json!({
+            "prompts": prompts.iter().map(|p| json!({
+                "name": p.name,
+                "description": p.description,
+                "arguments": p.arguments.iter().map(|(name, description, required)| json!({
+                    "name": name, "description": description, "required": required,
+                })).collect::<Vec<_>>(),
+            })).collect::<Vec<_>>()
+        }),
+        "prompts/get" => {
+            let prompt_name = params.get("name").and_then(Value::as_str).unwrap_or("");
+            let Some(prompt) = prompts.iter().find(|p| p.name == prompt_name) else {
+                return Some(error(id, -32602, &format!("Unknown prompt: {prompt_name}")));
+            };
+            let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
+            match (prompt.get)(&args) {
+                Ok(messages) => json!({ "description": prompt.description, "messages": messages }),
+                Err(message) => return Some(error(id, -32602, &message)),
+            }
+        }
         method => return Some(error(id, -32601, &format!("Method not found: {method}"))),
     };
     Some(json!({ "jsonrpc": "2.0", "id": id, "result": result }))
@@ -184,9 +242,15 @@ mod tests {
         ]
     }
 
+    fn prompts() -> Vec<Prompt> {
+        vec![Prompt::new("greet", "Greets.", vec![("who", "Name.", true)], |args| {
+            Ok(json!([user_message(format!("Hello {}", text(args, "who")?))]))
+        })]
+    }
+
     fn call(method: &str, params: Value) -> Value {
         let message = json!({ "jsonrpc": "2.0", "id": 7, "method": method, "params": params });
-        handle(&message, "Test", "", &tools()).unwrap()
+        handle(&message, "Test", "", &tools(), &prompts()).unwrap()
     }
 
     #[test]
@@ -212,7 +276,18 @@ mod tests {
     #[test]
     fn notifications_get_no_reply() {
         let message = json!({ "jsonrpc": "2.0", "method": "notifications/initialized" });
-        assert!(handle(&message, "Test", "", &tools()).is_none());
+        assert!(handle(&message, "Test", "", &tools(), &[]).is_none());
+    }
+
+    #[test]
+    fn lists_and_fills_prompts() {
+        assert_eq!(call("initialize", json!({}))["result"]["capabilities"]["prompts"], json!({}));
+        let list = call("prompts/list", json!({}));
+        assert_eq!(list["result"]["prompts"][0]["arguments"][0]["required"], true);
+        let got = call("prompts/get", json!({ "name": "greet", "arguments": { "who": "Ana" } }));
+        assert_eq!(got["result"]["messages"][0]["content"]["text"], "Hello Ana");
+        assert_eq!(call("prompts/get", json!({ "name": "greet" }))["error"]["code"], -32602);
+        assert_eq!(call("prompts/get", json!({ "name": "nope" }))["error"]["code"], -32602);
     }
 
     #[test]

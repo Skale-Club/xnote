@@ -23,11 +23,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-const DEFAULT_SOURCE: &str = concat!(
-    "https://github.com/Skale-Club/",
-    env!("CARGO_PKG_NAME"),
-    "/releases/latest/download/latest.json"
-);
+const DEFAULT_SOURCE: &str =
+    concat!("https://github.com/Skale-Club/", env!("CARGO_PKG_NAME"), "/releases/latest/download/latest.json");
 const PUBLIC_KEY: &str = include_str!("../updater.pub");
 const MAX_DOWNLOAD: u64 = 200 * 1024 * 1024;
 const USER_AGENT: &str = "skale-x-updater";
@@ -91,11 +88,7 @@ struct Source {
 
 fn https(url: &str) -> Result<(), String> {
     let parsed = url::Url::parse(url).map_err(|_| "invalidUpdateSource")?;
-    if parsed.scheme() != "https"
-        || parsed.host_str().is_none()
-        || !parsed.username().is_empty()
-        || parsed.password().is_some()
-    {
+    if parsed.scheme() != "https" || parsed.host_str().is_none() || !parsed.username().is_empty() || parsed.password().is_some() {
         return Err("invalidUpdateSource".into());
     }
     Ok(())
@@ -104,14 +97,8 @@ fn https(url: &str) -> Result<(), String> {
 fn source() -> Result<String, String> {
     let path = crate::portable::data_dir().join("update-source.json");
     let url = match std::fs::read_to_string(&path) {
-        Ok(text) => {
-            serde_json::from_str::<Source>(&text)
-                .map_err(|_| "invalidUpdateSource")?
-                .url
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => option_env!("XPACE_UPDATE_URL")
-            .unwrap_or(DEFAULT_SOURCE)
-            .into(),
+        Ok(text) => serde_json::from_str::<Source>(&text).map_err(|_| "invalidUpdateSource")?.url,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => option_env!("XPACE_UPDATE_URL").unwrap_or(DEFAULT_SOURCE).into(),
         Err(e) => return Err(e.to_string()),
     };
     https(&url)?;
@@ -158,25 +145,17 @@ fn run() {
         return;
     }
     let before = status();
-    let staged = before
-        .version
-        .clone()
-        .filter(|_| before.state == State::Ready);
+    let staged = before.version.clone().filter(|_| before.state == State::Ready);
     set(|s| {
         if s.state != State::Ready {
             s.state = State::Checking;
         }
     });
     let outcome = check().and_then(|found| match found {
-        Some(update) if Some(&update.version) != staged.as_ref() => {
-            stage(&update).map(|_| Some(update))
-        }
+        Some(update) if Some(&update.version) != staged.as_ref() => stage(&update).map(|_| Some(update)),
         _ => Ok(None),
     });
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
     set(|s| {
         s.checked_at = Some(now);
         match outcome {
@@ -258,18 +237,10 @@ struct Asset {
 /// "v1.2.3" or "1.2.3" -> (1, 2, 3).
 fn version(text: &str) -> Option<(u64, u64, u64)> {
     let parts: Vec<_> = text.trim().trim_start_matches('v').split('.').collect();
-    if parts.len() != 3
-        || parts
-            .iter()
-            .any(|p| p.is_empty() || !p.bytes().all(|c| c.is_ascii_digit()))
-    {
+    if parts.len() != 3 || parts.iter().any(|p| p.is_empty() || !p.bytes().all(|c| c.is_ascii_digit())) {
         return None;
     }
-    Some((
-        parts[0].parse().ok()?,
-        parts[1].parse().ok()?,
-        parts[2].parse().ok()?,
-    ))
+    Some((parts[0].parse().ok()?, parts[1].parse().ok()?, parts[2].parse().ok()?))
 }
 
 /// The latest release, if it is newer than this build and carries a signed exe.
@@ -286,10 +257,7 @@ fn check() -> Result<Option<Update>, String> {
         Err(ureq::Error::Status(404, _)) => return Err("updateFeedMissing".into()),
         Err(e) => return Err(e.to_string()),
     };
-    if serde_json::from_str::<serde_json::Value>(&body)
-        .ok()
-        .is_some_and(|v| v.get("tag_name").is_some())
-    {
+    if serde_json::from_str::<serde_json::Value>(&body).ok().is_some_and(|v| v.get("tag_name").is_some()) {
         parse_release(serde_json::from_str(&body).map_err(|_| "invalidUpdateFeed")?)
     } else {
         parse_manifest(&body, env!("CARGO_PKG_VERSION"))
@@ -303,23 +271,14 @@ fn parse_release(release: Release) -> Result<Option<Update>, String> {
     if latest <= current {
         return Ok(None);
     }
-    let exe = release
-        .assets
-        .iter()
-        .find(|a| a.name.to_lowercase().ends_with(".exe"));
-    let sig = exe.and_then(|e| {
-        release
-            .assets
-            .iter()
-            .find(|a| a.name == format!("{}.sig", e.name))
-    });
+    let exe = release.assets.iter().find(|a| a.name.to_lowercase().ends_with(".exe"));
+    let sig = exe.and_then(|e| release.assets.iter().find(|a| a.name == format!("{}.sig", e.name)));
     Ok(match (exe, sig) {
         (Some(exe), Some(sig)) => Some(Update {
             version: release.tag_name.trim_start_matches('v').to_string(),
             notes: release.body.unwrap_or_default(),
             exe_url: exe.browser_download_url.clone(),
-            signature: String::from_utf8(download(&sig.browser_download_url)?)
-                .map_err(|e| e.to_string())?,
+            signature: String::from_utf8(download(&sig.browser_download_url)?).map_err(|e| e.to_string())?,
         }),
         _ => return Err("unsignedUpdate".into()),
     })
@@ -327,17 +286,10 @@ fn parse_release(release: Release) -> Result<Option<Update>, String> {
 
 fn download(url: &str) -> Result<Vec<u8>, String> {
     https(url)?;
-    let response = ureq::get(url)
-        .set("User-Agent", USER_AGENT)
-        .timeout(Duration::from_secs(600))
-        .call()
-        .map_err(|e| e.to_string())?;
+    let response =
+        ureq::get(url).set("User-Agent", USER_AGENT).timeout(Duration::from_secs(600)).call().map_err(|e| e.to_string())?;
     let mut bytes = Vec::new();
-    response
-        .into_reader()
-        .take(MAX_DOWNLOAD + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|e| e.to_string())?;
+    response.into_reader().take(MAX_DOWNLOAD + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
     if bytes.len() as u64 > MAX_DOWNLOAD {
         return Err("updateTooLarge".into());
     }
@@ -346,17 +298,14 @@ fn download(url: &str) -> Result<Vec<u8>, String> {
 
 /// Tauri stores keys and signatures as base64 of the minisign text files.
 fn from_base64(text: &str) -> Result<String, String> {
-    let raw = base64::engine::general_purpose::STANDARD
-        .decode(text.trim())
-        .map_err(|e| e.to_string())?;
+    let raw = base64::engine::general_purpose::STANDARD.decode(text.trim()).map_err(|e| e.to_string())?;
     String::from_utf8(raw).map_err(|e| e.to_string())
 }
 
 fn verify(data: &[u8], signature: &str) -> Result<(), String> {
     let key = PublicKey::decode(&from_base64(PUBLIC_KEY)?).map_err(|e| e.to_string())?;
     let signature = Signature::decode(&from_base64(signature)?).map_err(|e| e.to_string())?;
-    key.verify(data, &signature, true)
-        .map_err(|_| "the update's signature does not match".to_string())
+    key.verify(data, &signature, true).map_err(|_| "the update's signature does not match".to_string())
 }
 
 /// Read-only CLI verification used by CI before publishing a signed package.
@@ -365,10 +314,7 @@ pub fn verify_package(exe: &Path, sig: &Path) -> Result<(), String> {
     if size > MAX_DOWNLOAD {
         return Err("updateTooLarge".into());
     }
-    verify(
-        &std::fs::read(exe).map_err(|e| e.to_string())?,
-        &std::fs::read_to_string(sig).map_err(|e| e.to_string())?,
-    )
+    verify(&std::fs::read(exe).map_err(|e| e.to_string())?, &std::fs::read_to_string(sig).map_err(|e| e.to_string())?)
 }
 
 /// Handle the read-only release verification mode before any GUI/system work.
@@ -393,31 +339,21 @@ fn pending_path(exe: &Path) -> PathBuf {
 }
 
 fn staged(exe: &Path) -> Result<Manifest, String> {
-    let pending: Manifest = serde_json::from_str(
-        &std::fs::read_to_string(pending_path(exe)).map_err(|e| e.to_string())?,
-    )
-    .map_err(|_| "invalidUpdateFeed")?;
-    if version(&pending.version).ok_or("invalidUpdateFeed")?
-        <= version(env!("CARGO_PKG_VERSION")).unwrap()
-    {
+    let pending: Manifest = serde_json::from_str(&std::fs::read_to_string(pending_path(exe)).map_err(|e| e.to_string())?)
+        .map_err(|_| "invalidUpdateFeed")?;
+    if version(&pending.version).ok_or("invalidUpdateFeed")? <= version(env!("CARGO_PKG_VERSION")).unwrap() {
         return Err("no update is ready".into());
     }
     let path = sibling(exe, "new");
     if std::fs::metadata(&path).map_err(|e| e.to_string())?.len() > MAX_DOWNLOAD {
         return Err("updateTooLarge".into());
     }
-    verify(
-        &std::fs::read(path).map_err(|e| e.to_string())?,
-        &pending.signature,
-    )?;
+    verify(&std::fs::read(path).map_err(|e| e.to_string())?, &pending.signature)?;
     Ok(pending)
 }
 
 fn sibling(exe: &Path, tag: &str) -> PathBuf {
-    let stem = exe
-        .file_stem()
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_default();
+    let stem = exe.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     exe.with_file_name(format!("{stem}.{tag}.exe"))
 }
 
@@ -440,11 +376,7 @@ fn stage(update: &Update) -> Result<(), String> {
         url: update.exe_url.clone(),
         signature: update.signature.clone(),
     };
-    std::fs::write(
-        pending_path(&exe),
-        serde_json::to_vec(&pending).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())
+    std::fs::write(pending_path(&exe), serde_json::to_vec(&pending).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
 }
 
 /// Swaps in the downloaded exe, if there is one, and returns the exe's path.
@@ -457,14 +389,14 @@ pub fn apply() -> Option<PathBuf> {
 fn apply_at(exe: &Path) -> Option<PathBuf> {
     // Validate again at execution time; a stray/replaced .new.exe is never run.
     staged(exe).ok()?;
-    let (new, old) = (sibling(&exe, "new"), sibling(&exe, "old"));
+    let (new, old) = (sibling(exe, "new"), sibling(exe, "old"));
     if !new.exists() {
         return None;
     }
     let _ = std::fs::remove_file(&old);
-    std::fs::rename(&exe, &old).ok()?;
-    if std::fs::rename(&new, &exe).is_err() {
-        let _ = std::fs::rename(&old, &exe); // put the working copy back
+    std::fs::rename(exe, &old).ok()?;
+    if std::fs::rename(&new, exe).is_err() {
+        let _ = std::fs::rename(&old, exe); // put the working copy back
         return None;
     }
     let _ = std::fs::remove_file(pending_path(exe));
@@ -474,12 +406,7 @@ fn apply_at(exe: &Path) -> Option<PathBuf> {
 /// Swaps in the downloaded exe and starts it. The caller must exit right after.
 pub fn restart() -> Result<(), String> {
     let exe = apply().ok_or("no update is ready")?;
-    Command::new(&exe)
-        .arg("--updated-from")
-        .arg(std::process::id().to_string())
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    Command::new(&exe).arg("--updated-from").arg(std::process::id().to_string()).spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
 #[link(name = "kernel32")]
@@ -493,11 +420,8 @@ extern "system" {
 /// exit, then remove it.
 pub fn finish_previous() {
     let args: Vec<String> = std::env::args().collect();
-    let previous = args
-        .iter()
-        .position(|a| a == "--updated-from")
-        .and_then(|i| args.get(i + 1))
-        .and_then(|pid| pid.parse::<u32>().ok());
+    let previous =
+        args.iter().position(|a| a == "--updated-from").and_then(|i| args.get(i + 1)).and_then(|pid| pid.parse::<u32>().ok());
     if let Some(pid) = previous {
         const SYNCHRONIZE: u32 = 0x0010_0000;
         unsafe {
@@ -544,57 +468,27 @@ mod tests {
     fn checks_the_apps_own_repository() {
         assert_eq!(
             DEFAULT_SOURCE,
-            format!(
-                "https://github.com/Skale-Club/{}/releases/latest/download/latest.json",
-                env!("CARGO_PKG_NAME")
-            )
+            format!("https://github.com/Skale-Club/{}/releases/latest/download/latest.json", env!("CARGO_PKG_NAME"))
         );
     }
 
     #[test]
     fn feed_requires_a_new_stable_version_and_signed_https_package() {
         let manifest = |version: &str, url: &str, signature: &str| {
-            serde_json::json!({ "version": version, "url": url, "signature": signature })
-                .to_string()
+            serde_json::json!({ "version": version, "url": url, "signature": signature }).to_string()
         };
-        assert!(parse_manifest(
-            &manifest("0.2.0", "https://example.com/Xpace.exe", SIG),
-            "0.1.0"
-        )
-        .unwrap()
-        .is_some());
-        assert!(parse_manifest(
-            &manifest("0.1.0", "https://example.com/Xpace.exe", SIG),
-            "0.1.0"
-        )
-        .unwrap()
-        .is_none());
-        assert!(parse_manifest(
-            &manifest("0.2.0-beta", "https://example.com/Xpace.exe", SIG),
-            "0.1.0"
-        )
-        .is_err());
-        assert!(parse_manifest(
-            &manifest("0.2.0", "http://example.com/Xpace.exe", SIG),
-            "0.1.0"
-        )
-        .is_err());
-        assert!(parse_manifest(
-            &manifest("0.2.0", "https://example.com/Xpace.exe", "invalid"),
-            "0.1.0"
-        )
-        .is_err());
+        assert!(parse_manifest(&manifest("0.2.0", "https://example.com/Xpace.exe", SIG), "0.1.0").unwrap().is_some());
+        assert!(parse_manifest(&manifest("0.1.0", "https://example.com/Xpace.exe", SIG), "0.1.0").unwrap().is_none());
+        assert!(parse_manifest(&manifest("0.2.0-beta", "https://example.com/Xpace.exe", SIG), "0.1.0").is_err());
+        assert!(parse_manifest(&manifest("0.2.0", "http://example.com/Xpace.exe", SIG), "0.1.0").is_err());
+        assert!(parse_manifest(&manifest("0.2.0", "https://example.com/Xpace.exe", "invalid"), "0.1.0").is_err());
         assert!(https("https://name:password@example.com/feed.json").is_err());
         assert!(https("file:///C:/update.exe").is_err());
     }
 
     #[test]
     fn unsigned_legacy_release_is_an_error() {
-        let release = Release {
-            tag_name: "999.0.0".into(),
-            body: None,
-            assets: vec![],
-        };
+        let release = Release { tag_name: "999.0.0".into(), body: None, assets: vec![] };
         assert_eq!(parse_release(release).err().unwrap(), "unsignedUpdate");
     }
 
@@ -622,10 +516,7 @@ mod tests {
         std::fs::write(&new, DATA).unwrap();
         assert_eq!(apply_at(&exe), Some(exe.clone()));
         assert_eq!(std::fs::read(&exe).unwrap(), DATA);
-        assert_eq!(
-            std::fs::read(root.join("Data/settings.json")).unwrap(),
-            b"keep settings"
-        );
+        assert_eq!(std::fs::read(root.join("Data/settings.json")).unwrap(), b"keep settings");
         assert!(!pending_path(&exe).exists());
         // This absolute target is a single disposable fixture created above.
         std::fs::remove_dir_all(&root).unwrap();

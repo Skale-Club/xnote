@@ -214,8 +214,8 @@ fn open(
     out: Sender<Segment>,
     levels: Arc<Levels>,
 ) -> Result<Stream, String> {
-    let supported = if loopback { device.default_output_config() } else { device.default_input_config() }
-        .map_err(|e| e.to_string())?;
+    let supported =
+        if loopback { device.default_output_config() } else { device.default_input_config() }.map_err(|e| e.to_string())?;
     let config: StreamConfig = supported.config();
     let chunker = Chunker {
         who,
@@ -263,10 +263,9 @@ impl Recorder {
                 let host = cpal::default_host();
                 let mut streams = Vec::new();
                 let mut warnings = Vec::new();
-                for (who, loopback, device) in [
-                    (Who::Me, false, host.default_input_device()),
-                    (Who::Them, true, host.default_output_device()),
-                ] {
+                for (who, loopback, device) in
+                    [(Who::Me, false, host.default_input_device()), (Who::Them, true, host.default_output_device())]
+                {
                     let name = if loopback { "speakers" } else { "microphone" };
                     match device {
                         Some(d) => match open(&d, loopback, who, started, out.clone(), levels.clone()) {

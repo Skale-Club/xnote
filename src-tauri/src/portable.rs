@@ -6,10 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 
 pub fn exe_dir() -> PathBuf {
-    std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(PathBuf::from))
-        .unwrap_or_else(|| PathBuf::from("."))
+    std::env::current_exe().ok().and_then(|exe| exe.parent().map(PathBuf::from)).unwrap_or_else(|| PathBuf::from("."))
 }
 
 /// `Data\` next to the exe, created on first use.
@@ -52,4 +49,13 @@ pub fn sync_appinfo() {
     if updated != text {
         let _ = fs::write(&path, updated);
     }
+}
+
+/// Whether the app can save beside the exe (not, for example, under
+/// Program Files without administrator rights).
+pub fn writable() -> bool {
+    let probe = data_dir().join(".write-test");
+    let ok = fs::write(&probe, b"ok").is_ok();
+    let _ = fs::remove_file(probe);
+    ok
 }

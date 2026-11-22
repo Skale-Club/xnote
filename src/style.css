@@ -161,3 +161,65 @@ select.field { flex: none; min-width: 200px; }
 
 .updates-source { overflow-wrap: anywhere; }
 .ver.failed { color: var(--warn); border-color: rgba(245, 196, 81, .4); }
+
+/* ---------- guided setup, AI summary and providers (providers-ui.js) ---------- */
+.steps { margin: 0 0 6px; color: var(--brand-soft); font-size: 12px; letter-spacing: 0.4px; }
+.setup-actions { display: flex; gap: 10px; justify-content: flex-end; margin: 4px 0 18px; }
+.row-label { min-width: 180px; color: var(--muted); }
+.note.warn { color: var(--warn); }
+.muted { color: var(--muted); }
+.tag.free { color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); }
+.check { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px; color: var(--muted); cursor: pointer; }
+
+.guide { margin: 0 0 16px; padding: 12px 16px 10px; border-radius: var(--radius-sm); background: var(--well); box-shadow: inset 0 0 0 1px var(--line); }
+.guide h4 { margin: 0 0 6px; color: var(--brand-soft); }
+.guide ol { margin: 0; padding-left: 20px; line-height: 1.6; }
+.guide li { margin: 2px 0; }
+.guide li::marker { color: var(--brand-soft); font-weight: 700; }
+.code-row { display: flex; align-items: center; gap: 6px; margin: 4px 0 2px; }
+.code-row code { padding: 4px 10px; border-radius: 8px; background: var(--raised); font: 13px var(--font-mono); user-select: all; }
+
+.sum-detail { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.sum-detail .row, .card .row + .row { margin-top: 8px; }
+
+.prov { border-top: 1px solid var(--line); }
+.prov-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 0; }
+.prov-row b { min-width: 150px; }
+.caps { display: flex; gap: 4px; flex: 1; }
+.prov-state { font-size: 13px; }
+.prov-actions { display: flex; gap: 4px; }
+.prov-key { padding: 0 0 14px; }
+.custom { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.custom summary { cursor: pointer; color: var(--brand-soft); font-weight: 600; margin-bottom: 10px; }
+
+.done ul { list-style: none; margin: 0 0 8px; padding: 0; line-height: 1.9; font-size: 15px; }
+
+.snippet { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; }
+.snippet pre { flex: 1; margin: 0; padding: 10px 12px; overflow-x: auto; border-radius: var(--radius-sm); background: var(--well); box-shadow: inset 0 0 0 1px var(--line); font: 12.5px/1.5 var(--font-mono); user-select: all; }
+
+/* ---------- Settings: one section at a time, chosen on the left ---------- */
+.page.settings { max-width: 1040px; }
+.settings-grid { display: grid; grid-template-columns: 190px 1fr; gap: 28px; align-items: start; margin-top: 18px; }
+.settings-nav { position: sticky; top: 0; display: flex; flex-direction: column; gap: 2px; }
+.nav-item { padding: 9px 12px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); font: 600 13.5px var(--font); text-align: left; cursor: pointer; transition: background 0.15s, color 0.15s; }
+.nav-item:hover { background: var(--hover); color: var(--fg); }
+.nav-item.on { background: var(--brand-tint); color: var(--fg); box-shadow: inset 2px 0 0 var(--brand-soft); }
+.settings-body h2 { margin: 0 0 4px; font: 700 19px/1.3 var(--font-display); }
+.settings-body .lead { margin: 0 0 16px; color: var(--muted); }
+.settings-body .card .row + .row { margin-top: 12px; }
+.status-line { margin: 0 0 12px; color: var(--brand-soft); font-weight: 600; }
+.steps-list { list-style: none; margin: 0 0 16px; padding: 18px 20px; }
+.step { display: grid; grid-template-columns: 28px 1fr; gap: 12px; }
+.step + .step { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.step-n { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--brand-tint); color: var(--brand-soft); font: 700 12px var(--font-mono); }
+.step b { display: block; margin: 2px 0 8px; }
+.step .note { margin: 0 0 6px; }
+
+.notice-bar { padding: 9px 34px; background: var(--brand-tint); color: var(--fg); font-size: 13px; border-bottom: 1px solid var(--line); }
+.notice-bar.warn { background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--warn); }
+.grow { flex: 1; min-width: 0; }
+.path { font: 12.5px var(--font-mono); color: var(--muted); word-break: break-all; }
+
+.badge { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; vertical-align: 1px; }
+.badge.local { color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); }
+.badge.cloud { color: var(--brand-soft); background: var(--brand-tint); }

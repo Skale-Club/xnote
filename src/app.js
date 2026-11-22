@@ -29,16 +29,13 @@ let settings = { language: 'en', transcriptionLanguage: 'auto', pack: '', model:
 let engine = null;          // { status: { gpu, packs, models }, pack, model }
 let meetings = [];
 let meeting = null;         // the open meeting
-let view = 'welcome';       // welcome | meeting | setup | settings
+let view = 'welcome';       // welcome | meeting | setup | settings (setup and settings: providers-ui.js)
 let recording = null;       // { id, phase: starting | recording | finishing, since, base, lines }
 let engineLoading = false;
 let startupRequestId = null;
 let notesTab = 'mine';
 let enhancing = null;       // { id, text } while notes stream in
-let hasKey = false;
 let search = '';
-let install = null;         // { engine: {done,total}, model: {done,total}, error }
-let setupChoice = null;     // { pack, model }
 let saveTimer = null;
 
 // ---------- helpers ----------
@@ -95,12 +92,10 @@ const isRecordingHere = () => recording && meeting && recording.id === meeting.i
 
 function engineReady() {
   if (!engine) return false;
-  const { status, mode, pack, model, provider, cloudKeys } = engine;
-  if (mode === 'cloud') return cloudKeys.includes(provider);
+  const { status, mode, pack, model, provider } = engine;
+  if (mode === 'cloud') return !!engine.providers.find((p) => p.id === provider && p.ready && p.canTranscribe);
   return mode === 'local' && status.packs.includes(pack) && status.models.includes(model);
 }
-
-const PROVIDER_NAMES = { groq: 'Groq', openai: 'OpenAI' };
 
 async function refreshList() {
   meetings = await invoke('list_meetings');
@@ -112,6 +107,8 @@ function explain(error) {
   if (e === 'refusal') return t('refusal');
   if (e === 'nothing to enhance') return t('nothingToEnhance');
   if (e === 'no API key') return t('needKey');
+  if (e === 'no model') return t('noModel');
+  if (e === 'not running') return t('notRunning', { name: providerName(engine?.summaryProvider) });
   return t('failed', { error: e });
 }
 
@@ -123,7 +120,8 @@ function renderSidebar() {
   $('search').placeholder = t('search');
   $('open-settings').innerHTML = `${svg(ICONS.gear)}<span>${esc(t('settings'))}</span>`;
   const q = search.trim().toLowerCase();
-  const list = meetings.filter((m) => !q || (m.title || t('untitled')).toLowerCase().includes(q));
+  // Titles match at once; notes, summaries and transcripts when the search answers.
+  const list = meetings.filter((m) => !q || (m.title || t('untitled')).toLowerCase().includes(q) || searchIds?.has(m.id));
   if (!list.length) {
     $('list').innerHTML = `<div class="empty-list">${esc(t('noMeetings'))}</div>`;
     return;
@@ -158,17 +156,23 @@ function renderHead() {
     rec = `<button class="btn" disabled>${esc(label)}</button>`;
   } else {
     const label = meeting.transcript.length ? t('resume') : t('record');
-    rec = `<button class="btn ${meeting.transcript.length ? 'rec-outline' : 'rec'}" data-act="record"${busyElsewhere ? ' disabled' : ''}>${svg(ICONS.mic)}${esc(label)}</button>`;
+    rec = `<button class="btn ${meeting.transcript.length ? 'rec-outline' : 'rec'}" data-act="record" title="Ctrl+R"${busyElsewhere ? ' disabled' : ''}>${svg(ICONS.mic)}${esc(label)}</button>`;
   }
   const canEnhance = !here && !enhancing && (meeting.transcript.length || meeting.notes.trim());
   const meta = [dayLabel(meeting.created), timeOf(meeting.created), meeting.durationMs ? duration(meeting.durationMs) : ''].filter(Boolean).join(' · ');
+  const sent = meeting.sentTo || [];
+  const badge = sent.length
+    ? `<span class="badge cloud" title="${esc(t('badgeCloudTip'))}">${esc(t('badgeCloud', { names: sent.join(', ') }))}</span>`
+    : `<span class="badge local" title="${esc(t('badgeLocalTip'))}">${esc(t('badgeLocal'))}</span>`;
   el.innerHTML =
     `<div class="titles"><input id="title" class="title-input" value="${esc(meeting.title)}" placeholder="${esc(t('untitled'))}">` +
-    `<div class="meta">${esc(meta)}</div></div><div class="actions">${rec}` +
-    `<button class="btn primary" data-act="enhance"${canEnhance ? '' : ' disabled'}>${svg(ICONS.sparkle)}${esc(enhancing ? t('enhancing') : t('enhance'))}</button>` +
-    `<button class="btn ghost" data-act="copy" title="${esc(t('copyMd'))}">${svg(ICONS.copy)}</button>` +
-    `<button class="btn ghost" data-act="export" title="${esc(t('export'))}">${svg(ICONS.download)}</button>` +
-    `<button class="btn ghost" data-act="delete" title="${esc(t('delete'))}"${here ? ' disabled' : ''}>${svg(ICONS.trash)}</button></div>`;
+    `<div class="meta">${esc(meta)} ${badge}</div></div><div class="actions">${rec}` +
+    (engine?.summaryReady
+      ? `<button class="btn primary" data-act="enhance"${canEnhance ? '' : ' disabled'}>${svg(ICONS.sparkle)}${esc(enhancing ? t('enhancing') : t('enhance'))}</button>`
+      : `<button class="btn ghost" data-act="setup-summary" title="${esc(t('sumCloudDesc'))}">${svg(ICONS.sparkle)}${esc(t('setUpSummary'))}</button>`) +
+    `<button class="btn ghost" data-act="copy" title="${esc(t('copyMd'))}" aria-label="${esc(t('copyMd'))}">${svg(ICONS.copy)}</button>` +
+    `<button class="btn ghost" data-act="export" title="${esc(t('export'))} (Ctrl+E)" aria-label="${esc(t('export'))}">${svg(ICONS.download)}</button>` +
+    `<button class="btn ghost" data-act="delete" title="${esc(t('delete'))}" aria-label="${esc(t('delete'))}"${here ? ' disabled' : ''}>${svg(ICONS.trash)}</button></div>`;
   $('title').addEventListener('change', (e) => saveTitle(e.target.value));
   tick();
 }
@@ -246,7 +250,7 @@ async function newMeeting() {
   const m = await invoke('create_meeting');
   await refreshList();
   await open(m.id);
-  if (!engineReady()) { view = 'setup'; render(); }
+  if (!engineReady()) openSetup(engine?.mode ? 'change' : 'first');
 }
 
 async function open(id) {
@@ -263,7 +267,7 @@ async function open(id) {
 
 async function startRecording() {
   if (recording) return;
-  if (!engineReady()) { view = 'setup'; render(); return; }
+  if (!engineReady()) { openSetup(engine?.mode ? 'change' : 'first'); return; }
   const target = meeting;
   const requestId = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   startupRequestId = requestId;
@@ -284,7 +288,7 @@ async function startRecording() {
     if (startupRequestId !== requestId) return;
     recording = null; engineLoading = false;
     if (String(e) === 'startup_cancelled') window.XnotePreparation.close();
-    else if (String(e) === 'engine') { window.XnotePreparation.close(); view = 'setup'; render(); return; }
+    else if (String(e) === 'engine') { window.XnotePreparation.close(); openSetup('change'); return; }
     else window.XnotePreparation.fail(requestId, String(e));
     renderHead(); renderSidebar();
   }
@@ -298,9 +302,9 @@ async function stopRecording() {
     if (meeting && meeting.id === m.id) {
       meeting.durationMs = m.durationMs;
       meeting.transcript = m.transcript;
-      // Like Granola: the notes are written as soon as the meeting ends, when
-      // something new was said and a key is set. The button stays to redo it.
-      summarize = hasKey && !enhancing && m.transcript.length > linesBefore;
+      // The summary is optional: written as soon as the meeting ends only when
+      // a summary provider is set up and something new was said.
+      summarize = engine?.summaryReady && engine.autoSummary && !enhancing && m.transcript.length > linesBefore;
     }
   } catch (e) {
     toast(explain(e));
@@ -311,7 +315,7 @@ async function stopRecording() {
 }
 
 async function enhance() {
-  if (!hasKey) { toast(t('needKey')); view = 'settings'; render(); return; }
+  if (!engine?.summaryReady) { toast(t('needSummary')); handleProviderAct('setup-summary', { dataset: {} }); return; }
   const id = meeting.id;
   enhancing = { id, text: '' };
   notesTab = 'enhanced';
@@ -319,7 +323,7 @@ async function enhance() {
   renderNotesPane();
   try {
     const m = await invoke('enhance', { id });
-    if (meeting && meeting.id === id) { meeting.enhanced = m.enhanced; meeting.title = m.title; }
+    if (meeting && meeting.id === id) { meeting.enhanced = m.enhanced; meeting.title = m.title; meeting.sentTo = m.sentTo; }
   } catch (e) {
     toast(explain(e));
   }
@@ -354,172 +358,6 @@ async function removeMeeting() {
   }
 }
 
-// ---------- setup ----------
-
-function renderSetup() {
-  const status = engine.status;
-  if (!setupChoice) {
-    setupChoice = {
-      // Without an NVIDIA card local transcription is slow, so the cloud is
-      // suggested first there.
-      mode: engine.mode || (status.gpu ? 'local' : 'cloud'),
-      pack: engine.pack || (status.gpu ? 'cuda' : 'cpu'),
-      model: engine.model || 'best',
-      provider: engine.provider || 'groq',
-    };
-  }
-  const tagOf = (text) => `<span class="tag">${esc(text)}</span>`;
-  const choice = (group, id, name, desc, opts = {}) => {
-    const installed = group === 'pack' ? status.packs.includes(id) : group === 'model' ? status.models.includes(id) : false;
-    const tag = installed ? tagOf(t('installed')) : opts.recommended ? tagOf(t('recommended')) : '';
-    const size = group === 'mode' || installed ? '' : `${SIZES_MB[id]} MB`;
-    return `<label class="choice"><input type="radio" name="${group}" value="${id}"${setupChoice[group] === id ? ' checked' : ''}${opts.disabled ? ' disabled' : ''}>` +
-      `<div><b>${esc(name)}${tag}</b><span>${esc(opts.disabled ? opts.disabledText : desc)}</span></div>` +
-      `<span class="size readout">${size}</span></label>`;
-  };
-  const modeCard = `<div class="card"><h3>${esc(t('modeCard'))}</h3>` +
-    choice('mode', 'local', t('localName'), t('localDesc'), { recommended: status.gpu }) +
-    choice('mode', 'cloud', t('cloudName'), t('cloudDesc'), { recommended: !status.gpu }) + '</div>';
-  const body = setupChoice.mode === 'cloud' ? cloudSetup() : localSetup(choice);
-  viewEl.innerHTML = `<div class="page"><h1>${esc(t('setupTitle'))}</h1><p>${esc(t('setupText'))}</p>${modeCard}${body}</div>`;
-  renderInstallProgress();
-}
-
-function localSetup(choice) {
-  const status = engine.status;
-  const need = (status.packs.includes(setupChoice.pack) ? 0 : SIZES_MB[setupChoice.pack]) +
-    (status.models.includes(setupChoice.model) ? 0 : SIZES_MB[setupChoice.model]);
-  const label = need ? t('download', { size: `${need} MB` }) : t('useThis');
-  return `<div class="card"><h3>${esc(t('engineCard'))}</h3>` +
-    choice('pack', 'cuda', t('gpuName'), t('gpuDesc'), { recommended: status.gpu, disabled: !status.gpu, disabledText: t('noGpu') }) +
-    choice('pack', 'cpu', t('cpuName'), t('cpuDesc'), { recommended: !status.gpu }) + '</div>' +
-    `<div class="card"><h3>${esc(t('modelCard'))}</h3>` +
-    choice('model', 'best', t('bestName'), t('bestDesc'), { recommended: true }) +
-    choice('model', 'light', t('lightName'), t('lightDesc')) + '</div>' +
-    `<button class="btn primary" data-act="install"${install && !install.error ? ' disabled' : ''}>${esc(install && !install.error ? t('downloading') : label)}</button>` +
-    '<div class="progress" id="setup-progress"></div>';
-}
-
-function cloudSetup() {
-  const id = setupChoice.provider;
-  const name = PROVIDER_NAMES[id];
-  const saved = engine.cloudKeys.includes(id);
-  const opt = (value) => `<option value="${value}"${value === id ? ' selected' : ''}>${esc(PROVIDER_NAMES[value])}${value === 'groq' ? ` (${esc(t('recommended').toLowerCase())})` : ''}</option>`;
-  return `<div class="card"><h3>${esc(t('providerCard'))}</h3>` +
-    `<div class="row"><select id="provider" class="field">${opt('groq')}${opt('openai')}</select></div>` +
-    `<p class="note">${esc(t(`${id}Desc`))}</p>` +
-    (saved ? `<p><span class="ok-text">✓ ${esc(t('keySaved'))}</span></p>` : '') +
-    `<div class="row"><input id="cloud-key" class="field" type="password" placeholder="${esc(t('cloudKeyPlaceholder', { name }))}" autocomplete="off">` +
-    `<button class="btn" data-act="key-page" data-provider="${id}">${esc(t('getKey'))}</button>` +
-    (saved ? `<button class="btn danger-text" data-act="clear-cloud-key">${esc(t('remove'))}</button>` : '') + '</div>' +
-    `<p class="note">${esc(t('cloudKeyNote', { name }))}</p></div>` +
-    `<button class="btn primary" data-act="use-cloud">${esc(saved ? t('useProvider', { name }) : t('saveAndUse'))}</button>`;
-}
-
-async function useCloud(button) {
-  const provider = setupChoice.provider;
-  const key = $('cloud-key').value.trim();
-  if (!key && !engine.cloudKeys.includes(provider)) { $('cloud-key').focus(); return; }
-  button.disabled = true;
-  button.textContent = t('checking');
-  try {
-    engine = await invoke(key ? 'set_cloud_key' : 'use_cloud', key ? { provider, key } : { provider });
-    hasKey = engine.cloudKeys.includes('openai'); // the OpenAI key also writes the notes
-    toast(t('setupDone'));
-    view = meeting ? 'meeting' : 'welcome';
-    render();
-  } catch (e) {
-    toast(t('keyInvalid', { error: e }));
-    renderSetup();
-  }
-}
-
-function renderInstallProgress() {
-  const el = $('setup-progress');
-  if (!el || !install) return;
-  const bar = (label, p) => {
-    if (!p || !p.total) return '';
-    const pct = Math.min(100, Math.round((p.done / p.total) * 100));
-    return `<div class="lbl"><span>${esc(label)}</span><span class="readout">${Math.round(p.done / 1048576)} / ${Math.round(p.total / 1048576)} MB · ${pct}%</span></div>` +
-      `<div class="pbar"><i style="width:${pct}%"></i></div>`;
-  };
-  el.innerHTML = bar(t('progEngine'), install.engine) + bar(t('progModel'), install.model) +
-    (install.error ? `<p class="note" style="color:var(--rec)">${esc(t('failed', { error: install.error }))}</p>` : '');
-}
-
-async function runInstall() {
-  install = { engine: null, model: null, error: null };
-  renderSetup();
-  try {
-    engine = await invoke('install_engine', { pack: setupChoice.pack, model: setupChoice.model });
-    settings.pack = engine.pack;
-    settings.model = engine.model;
-    install = null;
-    toast(t('setupDone'));
-    view = meeting ? 'meeting' : 'welcome';
-    render();
-  } catch (e) {
-    install.error = String(e);
-    renderSetup();
-  }
-}
-
-// ---------- settings ----------
-
-function renderSettings() {
-  const opt = (value, label, current) => `<option value="${value}"${value === current ? ' selected' : ''}>${esc(label)}</option>`;
-  const cloud = engine?.mode === 'cloud';
-  const transcription = cloud
-    ? [t('cloudName'), PROVIDER_NAMES[engine.provider]]
-    : engine?.mode === 'local'
-      ? [t('localName'), { cuda: t('gpuName'), cpu: t('cpuName') }[engine.pack], { best: t('bestName'), light: t('lightName') }[engine.model]]
-      : ['—'];
-  viewEl.innerHTML =
-    `<div class="page"><h1>${esc(t('settings'))}</h1><p></p>` +
-    `<div class="card"><h3>${esc(t('langCard'))}</h3><div class="row" style="margin-bottom:12px"><span style="min-width:180px">${esc(t('appLanguage'))}</span>` +
-    `<select id="app-lang" class="field">${opt('en', 'English', language)}${opt('pt', 'Português', language)}${opt('es', 'Español', language)}</select></div>` +
-    `<div class="row"><span style="min-width:180px">${esc(t('meetingLanguage'))}</span><select id="meet-lang" class="field">` +
-    opt('auto', t('auto'), settings.transcriptionLanguage) + opt('pt', 'Português', settings.transcriptionLanguage) +
-    opt('en', 'English', settings.transcriptionLanguage) + opt('es', 'Español', settings.transcriptionLanguage) +
-    `</select></div><p class="note">${esc(t('meetingLanguageNote'))}</p></div>` +
-    `<div class="card"><h3>${esc(t('aiCard'))}</h3><p>${hasKey ? `<span class="ok-text">✓ ${esc(t('keySaved'))}</span>` : esc(t('keyMissing'))}</p>` +
-    `<div class="row"><input id="api-key" class="field" type="password" placeholder="sk-…" autocomplete="off">` +
-    `<button class="btn primary" data-act="save-key">${esc(t('save'))}</button>` +
-    (hasKey ? `<button class="btn danger-text" data-act="clear-key">${esc(t('remove'))}</button>` : '') +
-    `<button class="btn" data-act="key-page" data-provider="openai">${esc(t('getKey'))}</button>` +
-    `</div><p class="note">${esc(t('keyNote'))}</p></div>` +
-    `<div class="card"><h3>${esc(t('engineSettingsCard'))}</h3><div class="row"><span>${esc(transcription.filter(Boolean).join(' · '))}</span>` +
-    `<button class="btn small" data-act="setup">${esc(t('change'))}</button></div></div>` +
-    `<div class="card"><h3>${esc(t('privacyCard'))}</h3><p class="note" style="margin:0">` +
-    `${esc(cloud ? t('privacyCloud', { name: PROVIDER_NAMES[engine.provider] }) : t('privacy'))}</p></div></div>`;
-  $('app-lang').addEventListener('change', (e) => {
-    setLanguage(e.target.value);
-    settings.language = language;
-    invoke('set_language', { language });
-    render();
-  });
-  $('meet-lang').addEventListener('change', (e) => {
-    settings.transcriptionLanguage = e.target.value;
-    invoke('set_transcription_language', { language: e.target.value });
-  });
-}
-
-async function saveKey(button) {
-  const key = $('api-key').value.trim();
-  if (!key) return;
-  button.disabled = true;
-  button.textContent = t('checking');
-  try {
-    await invoke('set_api_key', { key });
-    hasKey = true;
-    engine = await invoke('engine_status'); // same key as OpenAI transcription
-    toast(t('keySaved'));
-  } catch (e) {
-    toast(t('keyInvalid', { error: e }));
-  }
-  renderSettings();
-}
-
 // ---------- page & updates ----------
 
 function renderWelcome() {
@@ -544,22 +382,33 @@ function render() {
 // ---------- events ----------
 
 $('new-meeting').addEventListener('click', newMeeting);
-$('open-settings').addEventListener('click', () => { view = 'settings'; render(); });
+$('open-settings').addEventListener('click', () => openSettings());
 $('skale').addEventListener('click', () => invoke('open_site'));
-$('search').addEventListener('input', (e) => { search = e.target.value; renderSidebar(); });
+let searchIds = null;
+let searchTimer = null;
+$('search').addEventListener('input', (e) => {
+  search = e.target.value;
+  searchIds = null;
+  renderSidebar();
+  clearTimeout(searchTimer);
+  const query = search.trim();
+  if (!query) return;
+  searchTimer = setTimeout(async () => {
+    const ids = await invoke('search_meeting_ids', { query }).catch(() => []);
+    if (search.trim() === query) { searchIds = new Set(ids); renderSidebar(); }
+  }, 250);
+});
 $('list').addEventListener('click', (e) => {
   const item = e.target.closest('[data-id]');
   if (item) open(item.dataset.id);
 });
 
-viewEl.addEventListener('change', (e) => {
-  if (['mode', 'pack', 'model'].includes(e.target.name) || e.target.id === 'provider') {
-    setupChoice[e.target.name || e.target.id] = e.target.value;
-    renderSetup();
-  }
-});
+viewEl.addEventListener('change', handleProviderChange);
+viewEl.addEventListener('input', handleProviderInput);
 
 viewEl.addEventListener('click', (e) => {
+  const section = e.target.closest('[data-section]');
+  if (section) { settingsSection = section.dataset.section; renderSettings(); return; }
   const tab = e.target.closest('[data-tab]');
   if (tab) { notesTab = tab.dataset.tab; renderNotesPane(); return; }
   const el = e.target.closest('[data-act]');
@@ -574,21 +423,7 @@ viewEl.addEventListener('click', (e) => {
     invoke('save_export', { name: meeting.title || t('untitled'), markdown: markdownOf(meeting) })
       .then((path) => toast(t('exported', { path })), (err) => toast(explain(err)));
   } else if (act === 'delete') removeMeeting();
-  else if (act === 'install') runInstall();
-  else if (act === 'setup') { view = 'setup'; setupChoice = null; render(); }
-  else if (act === 'save-key') saveKey(el);
-  else if (act === 'clear-key') {
-    invoke('clear_api_key').then(() => invoke('engine_status')).then((info) => { engine = info; hasKey = false; renderSettings(); });
-  }
-  else if (act === 'use-cloud') useCloud(el);
-  else if (act === 'key-page') invoke('open_key_page', { provider: el.dataset.provider });
-  else if (act === 'clear-cloud-key') {
-    invoke('clear_cloud_key', { provider: setupChoice.provider }).then((info) => {
-      engine = info;
-      hasKey = info.cloudKeys.includes('openai');
-      renderSetup();
-    });
-  }
+  else handleProviderAct(act, el);
 });
 
 listen('recording-state', ({ payload }) => {
@@ -610,6 +445,13 @@ listen('engine-loading', ({ payload }) => { engineLoading = payload; renderHead(
 listen('gpu-fallback', () => toast(t('gpuFallback')));
 
 listen('levels', ({ payload }) => {
+  // No sound from either side for a minute usually means a device problem.
+  if (recording?.phase === 'recording') {
+    const quiet = payload.me < 0.0005 && payload.them < 0.0005;
+    if (!quiet) silentSince = 0;
+    else if (!silentSince) silentSince = Date.now();
+    else if (!silenceWarned && Date.now() - silentSince > 60000) { silenceWarned = true; toast(t('silenceWarning')); }
+  } else { silentSince = 0; silenceWarned = false; }
   const width = (rms) => `${Math.min(100, Math.sqrt(rms) * 220)}%`;
   const me = $('lv-me'), them = $('lv-them');
   if (me) me.style.width = width(payload.me);
@@ -642,6 +484,30 @@ listen('enhance-delta', ({ payload }) => {
   if (el) el.innerHTML = enhancedHtml();
 });
 
+// ---------- notices: audio waiting for the cloud, Data folder, silence ----------
+
+let pendingCount = 0;
+let notWritable = false;
+let silentSince = 0;
+let silenceWarned = false;
+
+function renderNotice() {
+  const bar = $('notice-bar');
+  const text = notWritable ? t('notWritable') : pendingCount ? t('pendingBar', { n: pendingCount }) : '';
+  bar.hidden = !text;
+  bar.className = `notice-bar${notWritable ? ' warn' : ''}`;
+  bar.textContent = text;
+}
+
+function showPending(n) {
+  const before = pendingCount;
+  pendingCount = n;
+  renderNotice();
+  if (before && !n) toast(t('pendingSent'));
+}
+
+listen('pending', ({ payload }) => showPending(payload));
+
 let lastErrorToast = 0;
 listen('transcribe-error', ({ payload }) => {
   if (Date.now() - lastErrorToast > 10000) { lastErrorToast = Date.now(); toast(t('transcribeError', { error: payload })); }
@@ -655,12 +521,49 @@ listen('engine-progress', ({ payload }) => {
 
 setInterval(tick, 500);
 
+// Keyboard: Ctrl+N new meeting, Ctrl+R record / stop, Ctrl+F search,
+// Ctrl+E export, Ctrl+, Settings.
+document.addEventListener('keydown', (e) => {
+  if (!e.ctrlKey || e.altKey || e.metaKey || !$('modal').hidden) return;
+  const key = e.key.toLowerCase();
+  const inMeeting = view === 'meeting' && meeting;
+  if (key === 'n') newMeeting();
+  else if (key === 'f') $('search').focus();
+  else if (key === ',') openSettings();
+  else if (key === 'r' && inMeeting) {
+    if (isRecordingHere() && recording.phase === 'recording') stopRecording();
+    else if (!recording) startRecording();
+  } else if (key === 'e' && inMeeting) {
+    invoke('save_export', { name: meeting.title || t('untitled'), markdown: markdownOf(meeting) })
+      .then((path) => toast(t('exported', { path })), (err) => toast(explain(err)));
+  } else return;
+  e.preventDefault();
+});
+
+// An AI assistant (MCP) may have saved a summary while the window was in the
+// background: show it when the window comes back.
+window.addEventListener?.('focus', async () => {
+  if (recording || enhancing) return;
+  await refreshList().catch(() => {});
+  if (view === 'meeting' && meeting) {
+    try {
+      const fresh = await invoke('get_meeting', { id: meeting.id });
+      if (fresh.enhanced !== meeting.enhanced || fresh.title !== meeting.title) {
+        meeting.enhanced = fresh.enhanced;
+        meeting.title = fresh.title;
+        meeting.sentTo = fresh.sentTo;
+        renderMeeting();
+      }
+    } catch (_) { /* deleted or unreadable: the list shows it */ }
+  }
+});
+
 (async () => {
   try {
     settings = await invoke('get_settings');
   } catch (_) { /* defaults */ }
   setLanguage(settings.language);
-  [engine, hasKey, meetings] = await Promise.all([invoke('engine_status'), invoke('has_api_key'), invoke('list_meetings')]);
-  view = engineReady() ? 'welcome' : 'setup';
-  render();
+  [engine, meetings] = await Promise.all([invoke('engine_status'), invoke('list_meetings')]);
+  invoke('help_info').then((info) => { notWritable = !!info && !info.writable; showPending(info?.pending || 0); }).catch(() => {});
+  if (engineReady()) { view = 'welcome'; render(); } else openSetup(engine.mode ? 'change' : 'first');
 })();

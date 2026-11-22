@@ -50,15 +50,8 @@ impl Coordinator {
             return Err("startup_cancelled".into());
         }
         let cancelled = Arc::new(AtomicBool::new(false));
-        state.attempt = Some(Attempt {
-            request_id: request_id.into(),
-            cancelled: cancelled.clone(),
-        });
-        Ok(Guard {
-            owner: self,
-            request_id: request_id.into(),
-            cancelled,
-        })
+        state.attempt = Some(Attempt { request_id: request_id.into(), cancelled: cancelled.clone() });
+        Ok(Guard { owner: self, request_id: request_id.into(), cancelled })
     }
     pub fn cancel(&self, request_id: &str) -> bool {
         if request_id.is_empty() || request_id.len() > 128 {
@@ -100,17 +93,9 @@ impl Guard<'_> {
         }
     }
     pub fn commit(&self, install: impl FnOnce()) -> Result<(), String> {
-        let mut state = self
-            .owner
-            .state
-            .lock()
-            .map_err(|_| "startup_state_unavailable")?;
+        let mut state = self.owner.state.lock().map_err(|_| "startup_state_unavailable")?;
         self.check()?;
-        if !state
-            .attempt
-            .as_ref()
-            .is_some_and(|a| Arc::ptr_eq(&a.cancelled, &self.cancelled))
-        {
+        if !state.attempt.as_ref().is_some_and(|a| Arc::ptr_eq(&a.cancelled, &self.cancelled)) {
             return Err("startup_cancelled".into());
         }
         install();
@@ -122,11 +107,7 @@ impl Guard<'_> {
 impl Drop for Guard<'_> {
     fn drop(&mut self) {
         if let Ok(mut state) = self.owner.state.lock() {
-            if state
-                .attempt
-                .as_ref()
-                .is_some_and(|a| Arc::ptr_eq(&a.cancelled, &self.cancelled))
-            {
+            if state.attempt.as_ref().is_some_and(|a| Arc::ptr_eq(&a.cancelled, &self.cancelled)) {
                 state.attempt = None;
                 remember(&mut state.finished, &self.request_id);
             }
@@ -149,10 +130,7 @@ mod tests {
         assert!(!c.cancel("unrelated"));
         assert!(c.cancel("one"));
         let mut installed = false;
-        assert_eq!(
-            first.commit(|| installed = true).unwrap_err(),
-            "startup_cancelled"
-        );
+        assert_eq!(first.commit(|| installed = true).unwrap_err(), "startup_cancelled");
         assert!(!installed);
         drop(first);
         assert!(c.begin("retry").is_ok());

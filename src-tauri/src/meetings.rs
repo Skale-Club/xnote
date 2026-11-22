@@ -28,6 +28,18 @@ pub struct Meeting {
     pub notes: String,
     pub enhanced: String,
     pub transcript: Vec<Line>,
+    /// Services that received this meeting's audio or text (e.g. "Groq"),
+    /// for the privacy badge. Empty: everything stayed on this computer.
+    pub sent_to: Vec<String>,
+}
+
+impl Meeting {
+    /// Notes that `name` received part of this meeting.
+    pub fn mark_sent_to(&mut self, name: &str) {
+        if !self.sent_to.iter().any(|n| n == name) {
+            self.sent_to.push(name.to_string());
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -88,7 +100,8 @@ impl Store {
     fn write(meeting: &Meeting) -> Result<(), String> {
         let path = Self::path(&meeting.id)?;
         fs::create_dir_all(Self::dir()).map_err(|e| e.to_string())?;
-        let tmp = path.with_extension("tmp");
+        // Per process: the window and the MCP server (`--mcp`) may both save.
+        let tmp = path.with_extension(format!("{}.tmp", std::process::id()));
         let text = serde_json::to_string_pretty(meeting).map_err(|e| e.to_string())?;
         fs::write(&tmp, text).map_err(|e| e.to_string())?;
         fs::rename(&tmp, &path).map_err(|e| e.to_string())
@@ -134,7 +147,7 @@ impl Store {
                 })
             })
             .collect();
-        list.sort_by(|a, b| b.created.cmp(&a.created));
+        list.sort_by_key(|m| std::cmp::Reverse(m.created));
         list
     }
 
