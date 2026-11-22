@@ -4759,7 +4759,7 @@ dependencies = [
 
 [[package]]
 name = "xnote"
-version = "0.3.1"
+version = "1.0.0"
 dependencies = [
  "base64 0.22.1",
  "cpal",
